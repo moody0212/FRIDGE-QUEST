@@ -1,6 +1,6 @@
 'use client'
 
-import { Check } from 'lucide-react'
+import { Check, CheckSquare, Square } from 'lucide-react'
 import { BASIC_INGREDIENTS } from '@/lib/quest-data'
 import { SectionCard } from './section-card'
 
@@ -23,9 +23,17 @@ export function BasicIngredients({ selected, onToggle, onSelectAll }: Props) {
           type="button"
           onClick={onSelectAll}
           aria-pressed={allSelected}
-          className="flex items-center gap-1 rounded-full border border-primary/40 bg-secondary px-3 py-2 font-display text-xs text-secondary-foreground transition-colors hover:bg-primary/20"
+          className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-display text-xs transition-all ${
+            allSelected
+              ? 'border-primary bg-primary text-primary-foreground shadow-[0_2px_0_0_var(--secondary-foreground)]'
+              : 'border-border bg-muted text-muted-foreground hover:border-primary/40 hover:text-foreground'
+          }`}
         >
-          <Check aria-hidden="true" className="size-3.5" />
+          {allSelected ? (
+            <CheckSquare aria-hidden="true" className="size-3.5" />
+          ) : (
+            <Square aria-hidden="true" className="size-3.5" />
+          )}
           대부분 있어요
         </button>
       }
@@ -42,7 +50,7 @@ export function BasicIngredients({ selected, onToggle, onSelectAll }: Props) {
                 className={`flex min-h-11 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-all active:scale-95 ${
                   active
                     ? 'border-primary bg-primary text-primary-foreground shadow-[0_3px_0_0_var(--secondary-foreground)]'
-                    : 'border-border bg-muted text-muted-foreground'
+                    : 'border-border bg-muted text-muted-foreground hover:bg-card'
                 }`}
               >
                 <span aria-hidden="true">{item.emoji}</span>
@@ -54,8 +62,9 @@ export function BasicIngredients({ selected, onToggle, onSelectAll }: Props) {
         })}
       </ul>
       <p className="mt-3 text-xs text-muted-foreground">
-        선택 {selected.length} / {BASIC_INGREDIENTS.length}
+        선택 {selected.length} / {BASIC_INGREDIENTS.length} (0개 선택도 가능해요)
       </p>
     </SectionCard>
   )
 }
+

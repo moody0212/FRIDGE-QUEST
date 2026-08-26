@@ -10,7 +10,7 @@ type Props = {
   onAdd: (name: string) => void
   onRemove: (id: string) => void
   onStatusChange: (id: string, status: FreshnessKey) => void
-  countError: boolean
+  countErrorType: 'none' | 'empty' | 'one'
   statusError: boolean
 }
 
@@ -19,14 +19,35 @@ export function RescueIngredients({
   onAdd,
   onRemove,
   onStatusChange,
-  countError,
+  countErrorType,
   statusError,
 }: Props) {
   const [value, setValue] = useState('')
+  const [inputError, setInputError] = useState<string | null>(null)
 
   const submit = () => {
     const name = value.trim()
     if (!name) return
+
+    // 1. 20자 초과 검증
+    if (name.length > 20) {
+      setInputError('❗ 재료 이름은 20자 이내로 입력해주세요.')
+      return
+    }
+
+    // 2. 최대 10개 제한 검증
+    if (items.length >= 10) {
+      setInputError('❗ 냉털 재료는 최대 10개까지 입력할 수 있어요.')
+      return
+    }
+
+    // 3. 중복 재료 검증
+    if (items.some((item) => item.name.toLowerCase() === name.toLowerCase())) {
+      setInputError('❗ 이미 추가된 재료예요.')
+      return
+    }
+
+    setInputError(null)
     onAdd(name)
     setValue('')
   }
@@ -40,16 +61,22 @@ export function RescueIngredients({
       <div className="flex gap-2">
         <input
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            setValue(e.target.value)
+            if (inputError) setInputError(null)
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
               e.preventDefault()
               submit()
             }
           }}
+          maxLength={30}
           aria-label="냉털 재료 이름"
-          placeholder="예: 계란, 양배추, 두부"
-          className="min-h-12 flex-1 rounded-2xl border border-input bg-muted px-4 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-primary focus:bg-card"
+          placeholder="예: 양배추, 계란, 두부"
+          className={`min-h-12 flex-1 rounded-2xl border bg-muted px-4 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-primary focus:bg-card ${
+            inputError ? 'border-destructive' : 'border-input'
+          }`}
         />
         <button
           type="button"
@@ -60,6 +87,8 @@ export function RescueIngredients({
         </button>
       </div>
 
+      {inputError ? <ErrorHint>{inputError}</ErrorHint> : null}
+
       {items.length === 0 ? (
         <p className="mt-4 rounded-2xl border border-dashed border-border bg-muted/60 px-4 py-6 text-center text-sm text-muted-foreground">
           아직 구조 대상이 없어요 🫥
@@ -68,10 +97,13 @@ export function RescueIngredients({
         <ul className="mt-4 flex flex-col gap-2.5">
           {items.map((item) => {
             const status = item.status ? FRESHNESS[item.status] : null
+            const isMissing = statusError && item.status === null
             return (
               <li
                 key={item.id}
-                className="rounded-2xl border border-border bg-muted/50 p-3 pl-4"
+                className={`rounded-2xl border bg-muted/50 p-3 pl-4 transition-colors ${
+                  isMissing ? 'border-destructive/80 bg-destructive/5' : 'border-border'
+                }`}
               >
                 <div className="flex items-center gap-2">
                   <span className="font-display text-base">{item.name}</span>
@@ -101,7 +133,11 @@ export function RescueIngredients({
                     onChange={(e) => onStatusChange(item.id, e.target.value as FreshnessKey)}
                     aria-label={`${item.name} 상태 선택`}
                     className={`min-h-11 w-full appearance-none rounded-xl border bg-card pr-9 pl-3 text-sm font-medium outline-none focus:border-primary ${
-                      item.status ? 'border-border' : 'border-warning text-muted-foreground'
+                      item.status
+                        ? 'border-border'
+                        : isMissing
+                          ? 'border-destructive text-destructive font-semibold'
+                          : 'border-warning text-muted-foreground'
                     }`}
                   >
                     <option value="" disabled>
@@ -124,10 +160,14 @@ export function RescueIngredients({
         </ul>
       )}
 
-      {countError ? (
-        <ErrorHint>재료가 하나 더 필요해요! 냉털 식재료를 2개 이상 입력해주세요.</ErrorHint>
+      {countErrorType === 'empty' ? (
+        <ErrorHint>❗ 냉털할 식재료를 2개 이상 입력해주세요.</ErrorHint>
       ) : null}
-      {statusError ? <ErrorHint>모든 냉털 식재료의 상태를 선택해주세요.</ErrorHint> : null}
+      {countErrorType === 'one' ? (
+        <ErrorHint>❗ 재료가 하나 더 필요해요! 냉털 식재료를 2개 이상 입력해주세요.</ErrorHint>
+      ) : null}
+      {statusError ? <ErrorHint>❗ 모든 냉털 식재료의 상태를 선택해주세요.</ErrorHint> : null}
     </SectionCard>
   )
 }
+

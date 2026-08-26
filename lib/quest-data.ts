@@ -59,6 +59,7 @@ export type Quest = {
   basicUsed: string[]
   extraNeeded: string[]
   steps: string[]
+  warningMessage?: string
   exp: number
 }
 

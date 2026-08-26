@@ -1,14 +1,17 @@
 'use client'
 
+import { AlertTriangle, Sparkles } from 'lucide-react'
 import type { Quest } from '@/lib/quest-data'
 
-function Chip({ children, tone = 'plain' }: { children: string; tone?: 'plain' | 'good' }) {
+function Chip({ children, tone = 'plain' }: { children: string; tone?: 'plain' | 'good' | 'warn' }) {
   return (
     <span
       className={`rounded-full px-3 py-1 text-xs font-semibold ${
         tone === 'good'
           ? 'bg-secondary text-secondary-foreground'
-          : 'border border-border bg-card text-foreground'
+          : tone === 'warn'
+            ? 'bg-warning/20 text-warning-foreground border border-warning/30'
+            : 'border border-border bg-card text-foreground'
       }`}
     >
       {children}
@@ -31,18 +34,20 @@ function Group({
   )
 }
 
-export function QuestResult({ quest, onReroll }: { quest: Quest; onReroll: () => void }) {
+export function QuestResult({ quest, onReroll, isRerolling }: { quest: Quest; onReroll: () => void; isRerolling?: boolean }) {
   return (
     <section
       aria-live="polite"
       className="overflow-hidden rounded-3xl border-2 border-primary bg-card shadow-[0_6px_0_0_var(--primary)]"
     >
+      {/* 1. 구조 대상 배너 */}
       <div className="bg-destructive/10 px-5 py-3 text-center">
-        <p className="font-display text-xs tracking-[0.2em] text-destructive">🚨 RESCUE MISSION</p>
-        <p className="mt-1 font-display text-base">{quest.rescueTarget}를 먼저 구조해야 해요!</p>
+        <p className="font-display text-xs tracking-[0.2em] text-destructive">🚨 구조 대상</p>
+        <p className="mt-1 font-display text-base">🥬 {quest.rescueTarget}를 먼저 구조해볼까요?</p>
       </div>
 
       <div className="px-5 py-6">
+        {/* 2. 요리명 & 시간 */}
         <p className="text-center font-display text-xs tracking-[0.2em] text-primary">
           ⚔️ TODAY&apos;S QUEST
         </p>
@@ -53,51 +58,68 @@ export function QuestResult({ quest, onReroll }: { quest: Quest; onReroll: () =>
           ⏱ {quest.time}
         </p>
 
+        {/* 3. 재료 목록 */}
         <div className="mt-6 flex flex-col gap-4 rounded-2xl bg-muted/60 p-4">
-          <Group title="🧊 냉털 재료">
+          <Group title="🧊 사용하는 냉털 재료">
             {quest.rescueUsed.map((name) => (
               <Chip key={name} tone="good">
                 {name}
               </Chip>
             ))}
           </Group>
+
           <Group title="🧂 사용하는 기본 재료">
-            {quest.basicUsed.map((name) => (
-              <Chip key={name}>{name}</Chip>
-            ))}
+            {quest.basicUsed.length === 0 ? (
+              <Chip>없음</Chip>
+            ) : (
+              quest.basicUsed.map((name) => <Chip key={name}>{name}</Chip>)
+            )}
           </Group>
+
           <Group title="🛒 추가 필요 재료">
             {quest.extraNeeded.length === 0 ? (
               <Chip tone="good">없음</Chip>
             ) : (
-              quest.extraNeeded.map((name) => <Chip key={name}>{name}</Chip>)
+              quest.extraNeeded.map((name) => <Chip key={name} tone="warn">{name}</Chip>)
             )}
           </Group>
+
           {quest.extraNeeded.length === 0 ? (
-            <p className="rounded-xl bg-secondary px-3 py-2 text-center text-sm font-semibold text-secondary-foreground">
-              ✨ 추가 장보기 없이 가능!
+            <p className="flex items-center justify-center gap-1.5 rounded-xl bg-secondary px-3 py-2 text-center text-sm font-semibold text-secondary-foreground">
+              <Sparkles className="size-4" />
+              ✨ 추가 장보기 없이 바로 가능!
             </p>
           ) : null}
         </div>
 
+        {/* 🔴 상태 주의 안내 (해당 시) */}
+        {quest.warningMessage ? (
+          <div className="mt-5 flex items-start gap-2.5 rounded-2xl border border-destructive/30 bg-destructive/10 p-3.5 text-xs leading-relaxed text-destructive">
+            <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+            <p>{quest.warningMessage}</p>
+          </div>
+        ) : null}
+
+        {/* 4. 5단계 이내 조리법 */}
         <div className="mt-6">
-          <p className="font-display text-base">🍳 QUEST GUIDE</p>
+          <p className="font-display text-base">🍳 조리법</p>
           <ol className="mt-3 flex flex-col gap-2.5">
             {quest.steps.slice(0, 5).map((step, i) => (
               <li
                 key={step}
                 className="flex items-start gap-3 rounded-2xl border border-border bg-card p-3"
               >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary font-display text-xs text-secondary-foreground">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-secondary font-display text-xs text-secondary-foreground">
                   <span className="sr-only">STEP </span>
                   {i + 1}
                 </span>
-                <p className="pt-1 text-sm leading-relaxed">{step}</p>
+                <p className="pt-0.5 text-sm leading-relaxed">{step.replace(/^STEP\s*\d+\.\s*/, '')}</p>
               </li>
             ))}
           </ol>
         </div>
 
+        {/* 게이미피케이션 보상 */}
         <div className="mt-6 rounded-2xl border border-dashed border-primary/50 bg-secondary/60 p-4 text-center">
           <p className="font-display text-base">🎉 {quest.rescueTarget} 구조 성공!</p>
           <p className="mt-1 font-display text-sm text-primary">+{quest.exp} EXP</p>
@@ -108,24 +130,26 @@ export function QuestResult({ quest, onReroll }: { quest: Quest; onReroll: () =>
           >
             <div
               className="h-full rounded-full bg-primary transition-all duration-700"
-              style={{ width: `${Math.min(100, quest.exp / 2 + 20)}%` }}
+              style={{ width: `${Math.min(100, quest.exp / 1.5 + 20)}%` }}
             />
           </div>
         </div>
 
+        {/* 5. 다른 요리 추천받기 */}
         <button
           type="button"
+          disabled={isRerolling}
           onClick={onReroll}
-          className="mt-6 min-h-12 w-full rounded-2xl border border-border bg-muted font-display text-sm transition-colors hover:bg-secondary"
+          className="mt-6 min-h-12 w-full rounded-2xl border border-border bg-muted font-display text-sm transition-all hover:bg-secondary active:scale-[0.98] disabled:opacity-50"
         >
-          🔄 다른 요리 추천받기
+          {isRerolling ? '🤖 새로운 요리 탐색 중...' : '🔄 다른 요리 추천받기'}
         </button>
       </div>
     </section>
   )
 }
 
-export function QuestFailure({ onRetry }: { onRetry: () => void }) {
+export function QuestFailure({ onRetry, message }: { onRetry: () => void; message?: string }) {
   return (
     <section
       aria-live="polite"
@@ -134,8 +158,10 @@ export function QuestFailure({ onRetry }: { onRetry: () => void }) {
       <p aria-hidden="true" className="text-3xl">
         😵‍💫
       </p>
-      <p className="mt-3 font-display text-lg">AI 요리사가 퀘스트를 만들지 못했어요.</p>
-      <p className="mt-1 text-sm text-muted-foreground">잠시 후 다시 시도해주세요.</p>
+      <p className="mt-3 font-display text-lg">🤖 AI 요리사가 퀘스트를 만들지 못했어요.</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {message || '잠시 후 다시 시도해주세요. 기존 입력값은 모두 유지됩니다.'}
+      </p>
       <button
         type="button"
         onClick={onRetry}
@@ -146,3 +172,4 @@ export function QuestFailure({ onRetry }: { onRetry: () => void }) {
     </section>
   )
 }
+
