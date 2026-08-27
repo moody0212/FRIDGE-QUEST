@@ -37,6 +37,7 @@ const SPECIAL_INGREDIENTS_REQUIRING_PACKAGE_GUIDANCE = new Set([
   '피단',
   '블루치즈',
 ])
+const VERSATILE_BASICS = new Set(['대파', '마늘', '간장', '소금', '식용유', '참기름'])
 const GENERATION_ERROR = '퀘스트 생성에 문제가 생겼어요. 다시 시도해주세요.'
 
 function unique(values: string[]): string[] {
@@ -115,6 +116,12 @@ function validateAiQuest(
   }
   if (candidate.basicUsed.some((name) => !basics.includes(name))) {
     return { valid: false, reason: '보유하지 않은 기본 재료를 사용한다고 표시했습니다.' }
+  }
+  if (basics.some((name) => VERSATILE_BASICS.has(name)) && candidate.basicUsed.length === 0) {
+    return { valid: false, reason: '자연스럽게 활용할 수 있는 보유 기본 재료를 전혀 검토하지 않았습니다.' }
+  }
+  if (candidate.basicUsed.some((name) => !candidate.steps.join(' ').includes(name))) {
+    return { valid: false, reason: '사용한다고 표시한 기본 재료가 실제 조리 과정에 없습니다.' }
   }
 
   const reasonIngredients = candidate.failedIngredientReasons.map((item) => item.ingredient)
@@ -220,13 +227,17 @@ function buildPrompt({ basics, items, cookTime, previousRecipeName, previousCook
 5. allIngredients 중 rescuedIngredients에 없는 각 재료마다 failedIngredientReasons와 additionalUses를 정확히 하나씩 만드세요.
 6. 실패 이유는 현재 요리와의 궁합을 중심으로 짧고 쉬운 한 문장으로 쓰고, 근거 없이 위험하다고 단정하지 마세요.
 7. additionalUses는 자연스럽고 일반적인 활용법을 확실히 알 때만 구체적으로 안내하세요. 특수 식재료에 확신이 없으면 임의로 굽기·볶기·데우기를 지시하지 말고 제품 포장의 조리·섭취 안내를 확인하도록 하세요.
-8. basicUsed에는 보유 기본 재료만 넣으세요. 추가로 꼭 필요한 재료만 extraNeeded에 넣으세요.
-9. EXP, 성공률, allIngredients, failedIngredients는 반환하지 마세요. 서버 코드가 계산합니다.
-10. steps는 최대 5개이며 실제 조리 순서여야 합니다.
-11. 조리 방식을 볶음이나 구이에만 치우치지 마세요. 입력 재료와 조리시간에 자연스럽다면 국, 찌개, 탕, 전골 같은 국물 요리를 볶음·구이·전·조림·찜과 동등한 후보로 반드시 검토하세요.
-12. 김치, 두부류, 채소, 버섯, 달걀, 육류, 해산물처럼 국물 요리에 자연스럽게 어울리는 재료가 있으면 국 또는 찌개가 더 현실적인지 먼저 판단하세요. 다만 국물 요리에 맞지 않는 특수 식재료를 억지로 넣지는 마세요.
-${priorityIngredients.length > 0 ? `13. 직전 퀘스트의 실패 재료 ${JSON.stringify(priorityIngredients)}를 이번에는 우선 구조해 보세요. 단, 부자연스럽거나 비현실적이면 다시 제외해도 됩니다.` : ''}
-${previousRecipeName ? `14. 직전 요리 "${previousRecipeName}"와 실질적으로 다른 요리를 만드세요. 핵심 조리 방식이 "${previousCookingMethod}"였다면 국·찌개·탕·전골·볶음·구이·전·조림·찜 중 다른 계열을 우선 검토하세요. 수식어만 바꾼 요리는 금지합니다.` : ''}
+8. 보유 기본 재료를 조미·향·조리 기반으로 적극 검토하세요. 대파, 마늘, 간장, 소금, 식용유, 참기름처럼 현재 요리에 자연스럽게 쓸 수 있는 재료가 있다면 basicUsed에 포함하고 steps에도 원문으로 실제 사용하세요. 어울리지 않는 기본 재료까지 억지로 쓰지는 마세요.
+9. 보유 기본 재료로 해결할 수 있는 것을 extraNeeded에 다시 요구하지 말고, 추가로 꼭 필요한 재료만 extraNeeded에 넣으세요.
+10. EXP, 성공률, allIngredients, failedIngredients는 반환하지 마세요. 서버 코드가 계산합니다.
+11. steps는 최대 5개이며 실제 조리 순서여야 합니다.
+12. 조리 방식을 먼저 정하지 말고 재료의 형태, 수분, 궁합, 조리시간을 비교해 가장 자연스러운 방식을 고르세요. 국·찌개·탕·전골과 볶음·구이·전·조림·찜·무침·샐러드·토스트·샌드위치는 동등한 후보이며 어느 한 계열도 기본값이 아닙니다.
+13. 국물 요리는 물이나 육수에서 함께 익혔을 때 조합이 자연스러운 경우에만 선택하세요. 채소가 있다는 이유만으로 무조건 국을 만들지 마세요.
+14. 요리명은 실제 가정식이나 일반적인 메뉴로 납득할 수 있어야 합니다. 입력 재료 이름을 단순히 이어 붙여 생소한 메뉴를 창작하지 마세요. 자연스러운 한 접시가 안 되면 일부 재료만 rescuedIngredients에 넣고 나머지는 구조 실패로 분리하세요.
+15. 식빵·또띠아·바게트 같은 빵류가 중심이면 토스트, 오픈샌드, 샌드위치처럼 건식 조리를 검토하되, 자극적인 향신 채소를 빵에 억지로 결합하지 마세요. 예를 들어 입력이 식빵과 청양고추뿐이고 보유 기본 재료가 마늘·소금·식용유라면 식빵만 사용한 마늘 토스트가 자연스럽습니다. 청양고추 토스트를 창작하지 말고 청양고추는 이번 퀘스트 구조 실패와 별도 활용 안내로 분리하세요.
+16. "매콤", "특제" 같은 수식어는 어색한 재료 조합을 정당화하지 못합니다. 익숙한 요리로 설명할 수 없는 조합은 실패 처리하세요.
+${priorityIngredients.length > 0 ? `17. 직전 퀘스트의 실패 재료 ${JSON.stringify(priorityIngredients)}를 이번에는 우선 구조해 보세요. 단, 부자연스럽거나 비현실적이면 다시 제외해도 됩니다.` : ''}
+${previousRecipeName ? `18. 직전 요리 "${previousRecipeName}"와 실질적으로 다른 요리를 만드세요. 핵심 조리 방식이 "${previousCookingMethod}"였다면 다른 계열을 우선 검토하되, 재료에 맞지 않는 방식으로 억지 변경하지 마세요. 수식어만 바꾼 요리는 금지합니다.` : ''}
 
 [JSON 형식]
 {
