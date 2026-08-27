@@ -97,16 +97,15 @@ gantt
 - [x] **2.1 AI Route Handler 구축 (`/api/quest`)**
   - Next.js App Router POST 엔드포인트 생성
   - 요청 페이로드: `basics: string[]`, `items: { name: string, status: 'fresh' | 'soft' | 'bad' }[]`, `cookTime: string`, `excludeDish?: string`
-- [x] **2.2 프롬프트 엔지니어링 (`lib/ai-prompt.ts` / `/api/quest`)**
-  - 시스템 프롬프트에 PRD 핵심 룰 주입:
-    1. 요리 정확히 1개 추천
-    2. 🟡 상태 재료 1순위 활용 (구조 대상 지정)
-    3. 🔴 상태 재료는 강제 사용 금지 & 주의사항 객체 포함
-    4. 사용자가 체크한 기본 재료만 사용 (미체크 재료 사용 시 `extraNeeded`로 분리)
-    5. 추가 재료 최소화 (없는 요리 우선)
-    6. 조리 시간 제한 준수
-    7. 조리법 5단계 이내 작성 (`STEP 1 ~ STEP 5`)
-    8. 조리법에 언급된 모든 재료는 재료 목록에 필수 포함
+- [x] **2.2 프롬프트 엔지니어링 (`/api/quest`) & 7대 레시피 품질 고도화 룰**
+  - 시스템 프롬프트 및 레시피 합성 엔진에 7대 품질 룰 반영:
+    1. 재료 성격 내부 판단 (생재료, 일반재료, 조리식품, 이미 조리된 완성 음식 구별)
+    2. 부자연스러운 모든 재료 억지 섞기 방지 (어울리는 재료만 사용)
+    3. 이미 조리된 음식 별도 처리 (억지 볶음 제외, 💡 TIP 곁들임 카드 제안)
+    4. 재료별 고유 조리 동작 적용 (범용 문장 제거, 양파 썰기 / 삼겹살 자르기 / 계란 풀기 등)
+    5. 한국어 조사 괄호 표기 `(을/를)` 완전 제거 및 받침 맞춤 자동 연결 (`attachJosa`)
+    6. 실제로 맛있게 먹을 수 있는 조리 가능 레시피 우선
+    7. 레시피 및 재료 목록 정합성 강제 (`rescueUsed`, `basicUsed`, `extraNeeded`, `tip`)
 - [x] **2.3 Structured Output (JSON Schema / Zod)**
   - 응답 스키마 강제:
     ```typescript
