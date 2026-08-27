@@ -21,7 +21,7 @@ export function QuestHero() {
 
       <div className="mt-6 flex items-center justify-center gap-3 px-2">
         {/* 캐릭터 대사 말풍선 (캐릭터 얼굴 왼쪽에 밀착 배치 & 꼬리 구현) */}
-        <div className="relative max-w-[190px] shrink rounded-2xl border border-border bg-card px-3.5 py-2.5 text-left font-display text-xs leading-snug shadow-[0_3px_0_0_var(--border)] sm:max-w-[210px] sm:text-sm">
+        <div className="relative max-w-[170px] min-w-0 shrink rounded-2xl border border-border bg-card px-3 py-2.5 text-left font-display text-xs leading-snug shadow-[0_3px_0_0_var(--border)] sm:max-w-[210px] sm:px-3.5 sm:text-sm">
           버리기 전에
           <br />
           내가 구조해줄게!
@@ -33,7 +33,7 @@ export function QuestHero() {
         </div>
 
         {/* 캐릭터 이미지 */}
-        <div className="size-28 shrink-0 overflow-hidden rounded-full border-2 border-primary/30 bg-card sm:size-32">
+        <div className="size-24 shrink-0 overflow-hidden rounded-full border-2 border-primary/30 bg-card sm:size-32">
           <Image
             src="/images/fridge-mascot.png"
             alt="망토를 두른 귀여운 냉장고 구조대 캐릭터"

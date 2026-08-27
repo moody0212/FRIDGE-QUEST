@@ -58,7 +58,7 @@ export function RescueIngredients({
       title="🧊 오늘 냉털하고 싶은 재료는?"
       description="버리기 전에 구조하고 싶은 재료를 2개 이상 알려주세요."
     >
-      <div className="flex gap-2">
+      <div className="flex min-w-0 gap-2">
         <input
           value={value}
           onChange={(e) => {
@@ -74,7 +74,7 @@ export function RescueIngredients({
           maxLength={30}
           aria-label="냉털 재료 이름"
           placeholder="예: 양배추, 계란, 두부"
-          className={`min-h-12 flex-1 rounded-2xl border bg-muted px-4 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-primary focus:bg-card ${
+          className={`min-h-12 min-w-0 flex-1 rounded-2xl border bg-muted px-4 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-primary focus:bg-card ${
             inputError ? 'border-destructive' : 'border-input'
           }`}
         />
@@ -105,8 +105,8 @@ export function RescueIngredients({
                   isMissing ? 'border-destructive/80 bg-destructive/5' : 'border-border'
                 }`}
               >
-                <div className="flex items-center gap-2">
-                  <span className="font-display text-base">{item.name}</span>
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="min-w-0 max-w-full break-words font-display text-base">{item.name}</span>
                   {status ? (
                     <span
                       className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${status.tone}`}

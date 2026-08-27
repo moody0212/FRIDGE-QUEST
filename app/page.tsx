@@ -52,7 +52,7 @@ export default function LandingPage() {
           <p className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-secondary px-3 py-1.5 text-sm font-semibold text-secondary-foreground">
             <Sparkles className="size-4" aria-hidden="true" /> AI 냉장고 식재료 구조대
           </p>
-          <h1 className="mt-6 font-display text-4xl leading-[1.15] text-balance sm:text-5xl lg:text-6xl">
+          <h1 className="mt-6 font-display text-3xl leading-[1.15] text-balance sm:text-5xl lg:text-6xl">
             버리기 전에,
             <br />
             <span className="text-primary">맛있는 퀘스트</span>로 구조해요
@@ -75,15 +75,15 @@ export default function LandingPage() {
           <div className="absolute -top-10 -right-12 size-40 rounded-full bg-accent/25 blur-3xl" aria-hidden="true" />
           <div className="absolute -bottom-10 -left-12 size-44 rounded-full bg-primary/15 blur-3xl" aria-hidden="true" />
           <div className="relative rounded-[2rem] border border-border bg-card p-5 shadow-[0_8px_0_0_var(--border)] sm:p-7">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex min-w-0 items-center justify-between gap-2">
+              <div className="min-w-0">
                 <p className="text-xs font-semibold tracking-wider text-primary">TODAY&apos;S QUEST</p>
                 <p className="mt-1 font-display text-2xl">냉장고 구조 작전</p>
               </div>
-              <span className="rounded-full bg-warning/20 px-3 py-1 text-xs font-bold text-warning-foreground">+300 EXP</span>
+              <span className="shrink-0 rounded-full bg-warning/20 px-2.5 py-1 text-[11px] font-bold text-warning-foreground sm:px-3 sm:text-xs">+300 EXP</span>
             </div>
-            <div className="mt-5 flex items-center gap-4 rounded-3xl bg-secondary/70 p-4">
-              <div className="size-28 shrink-0 overflow-hidden rounded-full border-2 border-primary/25 bg-card sm:size-32">
+            <div className="mt-5 flex min-w-0 items-center gap-3 rounded-3xl bg-secondary/70 p-3 sm:gap-4 sm:p-4">
+              <div className="size-24 shrink-0 overflow-hidden rounded-full border-2 border-primary/25 bg-card sm:size-32">
                 <Image
                   src="/images/fridge-mascot.png"
                   alt="망토를 두른 FRIDGE QUEST 냉장고 구조대 캐릭터"
@@ -93,7 +93,7 @@ export default function LandingPage() {
                   className="size-full scale-105 object-contain"
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="font-display text-lg">재료 구조 준비 완료!</p>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
                   냉장고 속 재료를 알려주면 가장 맛있는 구조 작전을 찾아볼게요.
