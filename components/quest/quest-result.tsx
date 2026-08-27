@@ -128,7 +128,7 @@ export function QuestResult({
           <div className="mt-5 rounded-2xl border border-secondary bg-secondary/30 p-4 text-xs leading-relaxed">
             <p className="flex items-center gap-1.5 font-display font-semibold text-secondary-foreground">
               <UtensilsCrossed className="size-4 text-primary" />
-              <span>🥗 곁들임 & 별도 활용 안내 (100% 구조 완료)</span>
+              <span>🍽️ 곁들임 & 별도 활용 안내</span>
             </p>
             <ul className="mt-2.5 flex flex-col gap-2">
               {addUses.map((item) => (

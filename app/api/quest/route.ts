@@ -285,10 +285,15 @@ function generateFallbackQuest(
   // Provide additional uses for items not included in mainDishIngredients
   const unusedInMain = inputNames.filter((name) => !mainDishIngredients.includes(name))
   for (const name of unusedInMain) {
-    if (name.includes('취두부')) {
+    if (name.includes('취두부') || name.includes('낫토') || name.includes('피단') || name.includes('블루치즈')) {
       additionalUses.push({
         ingredient: name,
-        usage: `${name}는 일반 두부와 조리 특성이 다르므로 제품 포장의 안내를 확인하고 별도로 구워 곁들입니다.`,
+        usage: `${name}는 제품마다 조리 및 섭취 방법이 다를 수 있으므로 제품 포장의 조리·섭취 안내를 확인하신 후 활용해주세요.`,
+      })
+    } else if (isPreparedOrSpecial(name)) {
+      additionalUses.push({
+        ingredient: name,
+        usage: `${attachJosa(name, '은/는')} 이미 완성된 음식이므로 볶거나 조리하지 않고 차갑게 곁들이거나 토핑으로 올려 섭취하세요.`,
       })
     } else if (isSauceOrSeasoning(name)) {
       additionalUses.push({
@@ -298,7 +303,7 @@ function generateFallbackQuest(
     } else {
       additionalUses.push({
         ingredient: name,
-        usage: `${attachJosa(name, '은/는')} 씻거나 볶지 않고 메인 요리의 신선한 곁들임/토핑으로 곁들여 섭취하세요.`,
+        usage: `${attachJosa(name, '은/는')} 메인 요리와 함께 신선한 사이드로 곁들여 섭취하세요.`,
       })
     }
   }
@@ -402,7 +407,7 @@ ${lastRecipe ? `- 직전 추천 요리(동일 형태 피할 것): ${lastRecipe}`
 1. 사용자가 입력한 모든 재료("${inputNames.join(', ')}")는 이번 퀘스트에서 모두 구조 대상입니다!
 2. 그러나 어울리지 않는 재료(예: 취두부, 딸기, 샐러드 등)를 무작치 팬 하나에 넣고 "○○ 볶음"으로 합치지 마십시오!
 3. 서로 잘 어울리는 재료만 메인 요리(mainDishIngredients) 및 조리법(steps)에 사용하고, 어울리지 않는 재료는 별도 곁들임/토핑/안내(additionalUses)로 분리하세요.
-4. 취두부 등 조리 특성이 특수한 식재료의 조리법에 확신이 없다면 억지 볶음 레시피를 만들지 말고 "제품 포장 조리 안내 확인 후 별도 구이/곁들임"으로 additionalUses에 안전하게 제공하세요.
+4. 취두부, 낫토 등 발효/가공 특성이 특수한 식재료의 일반 조리법에 확신이 없다면 "별도로 구우세요/볶으세요" 같은 임의의 조리 동작을 창작하지 마십시오. 대신 "제품 포장의 조리·섭취 안내를 확인하신 후 곁들여주세요"와 같이 안전하고 정갈한 제품 안내 문구를 additionalUses에 제공하세요.
 
 [원문 보존 및 표기]
 1. 사용자가 입력한 재료명 원문("${inputNames.join(', ')}")을 100% 유지하십시오. (예: "취두부" ➔ "취두부", 절대 "두부"로 치환 금지)
