@@ -2,6 +2,11 @@
 
 > 입력한 냉털 재료를 모두 구조 시도하되, 실제 레시피에 자연스럽게 사용하는 재료만 **구조 가능**으로 판정하는 AI 요리 퀘스트입니다.
 
+## 바로가기
+
+- 🌐 [랜딩페이지](https://fridge-quest-liard.vercel.app/)
+- 🍳 [서비스 시작하기](https://fridge-quest-liard.vercel.app/quest)
+
 ## 핵심 기능 (v2.2.0)
 
 ### 랜딩페이지 및 서비스 진입
