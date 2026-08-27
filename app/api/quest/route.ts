@@ -29,7 +29,12 @@ interface AiQuest {
   warningMessage?: string
 }
 
-const MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash']
+const MODELS = [
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-3.6-flash',
+]
 const DISH_ADJECTIVES = ['매콤', '특제', '간단', '맛있는', '초간단']
 const SPECIAL_INGREDIENTS_REQUIRING_PACKAGE_GUIDANCE = new Set([
   '취두부',
@@ -37,7 +42,6 @@ const SPECIAL_INGREDIENTS_REQUIRING_PACKAGE_GUIDANCE = new Set([
   '피단',
   '블루치즈',
 ])
-const VERSATILE_BASICS = new Set(['대파', '마늘', '간장', '소금', '식용유', '참기름'])
 const GENERATION_ERROR = '퀘스트 생성에 문제가 생겼어요. 다시 시도해주세요.'
 
 function unique(values: string[]): string[] {
@@ -114,15 +118,8 @@ function validateAiQuest(
   if (stepMentions.some((name) => failedIngredients.includes(name))) {
     return { valid: false, reason: '구조 실패 재료가 실제 조리 과정에 포함되었습니다.' }
   }
-  if (candidate.basicUsed.some((name) => !basics.includes(name))) {
-    return { valid: false, reason: '보유하지 않은 기본 재료를 사용한다고 표시했습니다.' }
-  }
-  if (basics.some((name) => VERSATILE_BASICS.has(name)) && candidate.basicUsed.length === 0) {
-    return { valid: false, reason: '자연스럽게 활용할 수 있는 보유 기본 재료를 전혀 검토하지 않았습니다.' }
-  }
-  if (candidate.basicUsed.some((name) => !candidate.steps.join(' ').includes(name))) {
-    return { valid: false, reason: '사용한다고 표시한 기본 재료가 실제 조리 과정에 없습니다.' }
-  }
+  const stepsText = candidate.steps.join(' ')
+  const actualBasicUsed = basics.filter((name) => stepsText.includes(name))
 
   const reasonIngredients = candidate.failedIngredientReasons.map((item) => item.ingredient)
   const useIngredients = candidate.additionalUses.map((item) => item.ingredient)
@@ -152,7 +149,7 @@ function validateAiQuest(
       failedIngredients,
       failedIngredientReasons: candidate.failedIngredientReasons,
       additionalUses: ensureSafeAdditionalUses(candidate.additionalUses),
-      basicUsed: unique(candidate.basicUsed),
+      basicUsed: actualBasicUsed,
       extraNeeded: unique(candidate.extraNeeded),
       steps: candidate.steps.slice(0, 5),
       tip: candidate.tip?.trim() || undefined,
@@ -175,7 +172,10 @@ async function callGemini(model: string, apiKey: string, prompt: string): Promis
         }),
       },
     )
-    if (!response.ok) return null
+    if (!response.ok) {
+      console.warn(`Gemini model ${model} returned ${response.status}`)
+      return null
+    }
     const data = await response.json()
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text
     return rawText ? (JSON.parse(rawText) as AiQuest) : null
@@ -220,24 +220,31 @@ function buildPrompt({ basics, items, cookTime, previousRecipeName, previousCook
 - priorityIngredients: ${JSON.stringify(priorityIngredients)}
 
 [구조 판정 규칙]
-1. 모든 allIngredients는 구조 시도 대상이지만 한 요리에 억지로 전부 넣지 마세요. 정확성과 현실성이 우선입니다.
-2. rescuedIngredients에는 현재 요리의 steps에서 실제로 사용하는 냉털 재료만 넣으세요.
-3. rescuedIngredients의 이름은 allIngredients의 문자열을 글자 하나도 바꾸지 않고 그대로 복사하세요. 취두부, 두부, 순두부, 연두부는 서로 다른 재료입니다.
-4. rescuedIngredients의 모든 재료명을 steps에 원문 그대로 직접 쓰세요. 사용하지 않는 입력 재료명은 steps에 쓰지 마세요.
-5. allIngredients 중 rescuedIngredients에 없는 각 재료마다 failedIngredientReasons와 additionalUses를 정확히 하나씩 만드세요.
-6. 실패 이유는 현재 요리와의 궁합을 중심으로 짧고 쉬운 한 문장으로 쓰고, 근거 없이 위험하다고 단정하지 마세요.
-7. additionalUses는 자연스럽고 일반적인 활용법을 확실히 알 때만 구체적으로 안내하세요. 특수 식재료에 확신이 없으면 임의로 굽기·볶기·데우기를 지시하지 말고 제품 포장의 조리·섭취 안내를 확인하도록 하세요.
-8. 보유 기본 재료를 조미·향·조리 기반으로 적극 검토하세요. 대파, 마늘, 간장, 소금, 식용유, 참기름처럼 현재 요리에 자연스럽게 쓸 수 있는 재료가 있다면 basicUsed에 포함하고 steps에도 원문으로 실제 사용하세요. 어울리지 않는 기본 재료까지 억지로 쓰지는 마세요.
-9. 보유 기본 재료로 해결할 수 있는 것을 extraNeeded에 다시 요구하지 말고, 추가로 꼭 필요한 재료만 extraNeeded에 넣으세요.
-10. EXP, 성공률, allIngredients, failedIngredients는 반환하지 마세요. 서버 코드가 계산합니다.
-11. steps는 최대 5개이며 실제 조리 순서여야 합니다.
-12. 조리 방식을 먼저 정하지 말고 재료의 형태, 수분, 궁합, 조리시간을 비교해 가장 자연스러운 방식을 고르세요. 국·찌개·탕·전골과 볶음·구이·전·조림·찜·무침·샐러드·토스트·샌드위치는 동등한 후보이며 어느 한 계열도 기본값이 아닙니다.
-13. 국물 요리는 물이나 육수에서 함께 익혔을 때 조합이 자연스러운 경우에만 선택하세요. 채소가 있다는 이유만으로 무조건 국을 만들지 마세요.
-14. 요리명은 실제 가정식이나 일반적인 메뉴로 납득할 수 있어야 합니다. 입력 재료 이름을 단순히 이어 붙여 생소한 메뉴를 창작하지 마세요. 자연스러운 한 접시가 안 되면 일부 재료만 rescuedIngredients에 넣고 나머지는 구조 실패로 분리하세요.
-15. 식빵·또띠아·바게트 같은 빵류가 중심이면 토스트, 오픈샌드, 샌드위치처럼 건식 조리를 검토하되, 자극적인 향신 채소를 빵에 억지로 결합하지 마세요. 예를 들어 입력이 식빵과 청양고추뿐이고 보유 기본 재료가 마늘·소금·식용유라면 식빵만 사용한 마늘 토스트가 자연스럽습니다. 청양고추 토스트를 창작하지 말고 청양고추는 이번 퀘스트 구조 실패와 별도 활용 안내로 분리하세요.
-16. "매콤", "특제" 같은 수식어는 어색한 재료 조합을 정당화하지 못합니다. 익숙한 요리로 설명할 수 없는 조합은 실패 처리하세요.
-${priorityIngredients.length > 0 ? `17. 직전 퀘스트의 실패 재료 ${JSON.stringify(priorityIngredients)}를 이번에는 우선 구조해 보세요. 단, 부자연스럽거나 비현실적이면 다시 제외해도 됩니다.` : ''}
-${previousRecipeName ? `18. 직전 요리 "${previousRecipeName}"와 실질적으로 다른 요리를 만드세요. 핵심 조리 방식이 "${previousCookingMethod}"였다면 다른 계열을 우선 검토하되, 재료에 맞지 않는 방식으로 억지 변경하지 마세요. 수식어만 바꾼 요리는 금지합니다.` : ''}
+1. 레시피 선택의 최우선 목표는 allIngredients를 현실적인 범위에서 최대한 많이 구조하는 것입니다. 보유 기본 재료나 조리 편의 때문에 자연스럽게 함께 쓸 수 있는 냉털 재료를 제외하지 마세요.
+2. 최종 요리를 정하기 전에 내부적으로 실제 가정식으로 납득 가능한 후보를 최소 3개 검토하세요. 먼저 음식으로 자연스러운 후보만 남기고, 그중 rescuedIngredients가 가장 많은 후보를 선택하세요. 판단 순서는 현실성 > 구조율 > 창의성입니다. 후보 비교 과정은 JSON에 출력하지 마세요.
+3. 기본 재료는 냉털 재료와 경쟁하는 주재료가 아니라 냉털 재료의 조리를 돕는 보조 재료입니다. 우선순위는 (1) 냉털 재료 조합, (2) 기본 재료로 조리 보조, (3) 꼭 필요한 추가 재료, (4) 불가피한 구조 실패입니다.
+4. 양배추와 베이컨처럼 일반적인 조리 상식상 함께 볶을 수 있는 재료는 둘 다 구조하세요. 기본 재료가 대파·마늘·식용유라고 해서 "베이컨 대파볶음"을 고르고 양배추를 실패 처리하지 마세요. "양배추 베이컨 볶음"처럼 냉털 재료 중심의 요리를 선택하고 기본 재료는 조리를 보조해야 합니다.
+5. 구조 실패는 최후의 수단입니다. 실패로 정하기 직전에 "이 재료를 현재 입력들과 함께 쓰는 일반적인 국·찌개·볶음·전·조림·찜·무침 등의 방법이 정말 없는가?"를 다시 확인하세요. 일반적인 방법이 하나라도 있다면 더 간단한 요리를 위해 제외하지 말고 rescuedIngredients에 포함하세요.
+6. 구조 실패는 맛의 궁합이 명백히 나쁘거나, 식재료 특성상 같은 요리가 부자연스럽거나, 특수 식재료의 올바른 조리법을 확신할 수 없거나, 이미 조리된 음식이라 합치기 지나치게 부자연스러운 경우에만 허용합니다.
+7. failedIngredientReasons는 일반 조리 상식에 맞아야 합니다. 양배추가 베이컨 볶음과 어울리지 않는다는 식의 부당한 이유는 금지합니다. 타당한 실패 이유를 설명할 수 없다면 해당 재료를 구조하는 후보를 다시 선택하세요.
+8. rescuedIngredients에는 현재 요리의 steps에서 실제로 사용하는 냉털 재료만 넣으세요.
+9. rescuedIngredients의 이름은 allIngredients의 문자열을 글자 하나도 바꾸지 않고 그대로 복사하세요. 취두부, 두부, 순두부, 연두부는 서로 다른 재료입니다.
+10. rescuedIngredients의 모든 재료명을 steps에 원문 그대로 직접 쓰세요. 사용하지 않는 입력 재료명은 steps에 쓰지 마세요.
+11. allIngredients 중 rescuedIngredients에 없는 각 재료마다 failedIngredientReasons와 additionalUses를 정확히 하나씩 만드세요.
+12. 실패 이유는 현재 요리와의 궁합을 중심으로 짧고 쉬운 한 문장으로 쓰고, 근거 없이 위험하다고 단정하지 마세요.
+13. additionalUses는 자연스럽고 일반적인 활용법을 확실히 알 때만 구체적으로 안내하세요. 취두부 같은 특수 식재료에 확신이 없으면 임의로 굽기·볶기·데우기를 지시하지 말고 제품 포장의 조리·섭취 안내를 확인하도록 하세요.
+14. 보유 기본 재료를 조미·향·조리 기반으로 적극 검토하세요. 대파, 마늘, 간장, 소금, 식용유, 참기름처럼 현재 요리에 자연스럽게 쓸 수 있는 재료가 있다면 basicUsed에 포함하고 steps에도 원문으로 실제 사용하세요. 어울리지 않는 기본 재료까지 억지로 쓰지는 마세요.
+15. TODAY'S QUEST 요리명은 가능하면 rescuedIngredients인 냉털 재료를 중심으로 만드세요. 기본 재료가 요리명을 지배하지 않게 하되 실제 널리 쓰이는 고유 음식명은 예외입니다.
+16. 보유 기본 재료로 해결할 수 있는 것을 extraNeeded에 다시 요구하지 말고, 추가로 꼭 필요한 재료만 extraNeeded에 넣으세요.
+17. EXP, 성공률, allIngredients, failedIngredients는 반환하지 마세요. 서버 코드가 계산합니다.
+18. steps는 최대 5개이며 실제 조리 순서여야 합니다.
+19. 조리 방식을 먼저 정하지 말고 재료의 형태, 수분, 궁합, 조리시간을 비교해 가장 자연스러운 방식을 고르세요. 국·찌개·탕·전골과 볶음·구이·전·조림·찜·무침·샐러드·토스트·샌드위치는 동등한 후보이며 어느 한 계열도 기본값이 아닙니다.
+20. 김치·콩나물·계란·두부처럼 실제 국·찌개·볶음·전으로 함께 활용 가능한 재료는 "김치 콩나물 구이" 같은 비일반적인 요리보다 익숙한 가정식을 우선하세요. 이 조합은 김치·콩나물·두부로 국을 끓이고 계란을 풀어 넣으면 네 재료를 모두 자연스럽게 사용할 수 있으므로, 더 단순하게 만들기 위해 계란을 실패 처리하지 마세요.
+21. 요리명은 실제 가정식이나 일반적인 메뉴로 납득할 수 있어야 합니다. 입력 재료 이름을 단순히 이어 붙여 생소한 메뉴를 창작하지 마세요. 자연스러운 한 접시가 안 되면 일부 재료만 rescuedIngredients에 넣고 나머지는 구조 실패로 분리하세요.
+22. 식빵·또띠아·바게트 같은 빵류가 중심이면 토스트, 오픈샌드, 샌드위치처럼 건식 조리를 검토하되, 자극적인 향신 채소를 빵에 억지로 결합하지 마세요. 입력이 식빵과 청양고추뿐이면 식빵을 마늘 토스트 등으로 구조하고 청양고추는 구조 실패와 별도 활용 안내로 분리할 수 있습니다.
+23. "매콤", "특제" 같은 수식어는 어색한 재료 조합을 정당화하지 못합니다. 익숙한 요리로 설명할 수 없는 조합은 실패 처리하세요.
+${priorityIngredients.length > 0 ? `24. 직전 퀘스트의 실패 재료 ${JSON.stringify(priorityIngredients)}를 이번에는 우선 구조해 보세요. 단, 부자연스럽거나 비현실적이면 다시 제외해도 됩니다.` : ''}
+${previousRecipeName ? `25. 직전 요리 "${previousRecipeName}"와 실질적으로 다른 요리를 만드세요. 핵심 조리 방식이 "${previousCookingMethod}"였다면 다른 계열을 우선 검토하되, 재료에 맞지 않는 방식으로 억지 변경하지 마세요. 수식어만 바꾼 요리는 금지합니다.` : ''}
 
 [JSON 형식]
 {
@@ -293,12 +300,14 @@ export async function POST(request: Request) {
     if (firstCandidate) {
       const firstValidation = validateAiQuest(firstCandidate, allIngredients, basics, body.previousRecipeName)
       if (firstValidation.valid) return NextResponse.json(firstValidation.quest)
+      console.warn(`[Quest validation retry] ${firstValidation.reason}`)
 
       const retryPrompt = `${prompt}\n\n[1회 재생성 요청]\n이전 결과가 입력 재료 또는 레시피 일관성 검증에 실패했습니다: ${firstValidation.reason}\n사용자가 입력한 재료명을 변경하지 말고 rescuedIngredients와 실제 조리법이 정확히 일치하도록 다시 생성하세요. 모든 재료를 억지로 한 요리에 사용할 필요는 없습니다. 활용하기 어려운 재료에는 실패 이유와 현실적인 별도 활용 안내를 제공하세요.`
       const retryCandidate = await generateWithAvailableModel(apiKey, retryPrompt)
       if (retryCandidate) {
         const retryValidation = validateAiQuest(retryCandidate, allIngredients, basics, body.previousRecipeName)
         if (retryValidation.valid) return NextResponse.json(retryValidation.quest)
+        console.warn(`[Quest validation failed] ${retryValidation.reason}`)
       }
     }
 

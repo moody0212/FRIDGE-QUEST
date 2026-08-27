@@ -1,10 +1,18 @@
 # 🗺️ FRIDGE QUEST 개발 계획서
 
-> **문서 버전**: v2.1.0
+> **문서 버전**: v2.2.0
 >
 > **최종 수정일**: 2026-08-27
 >
-> **상태**: 구조 가능/실패 판정 시스템 구현 및 검증 완료
+> **상태**: 구조 가능/실패 판정 및 랜딩페이지 구현 완료
+
+## 0. 랜딩페이지와 서비스 라우팅
+
+- `/`: 서비스 소개, 사용 흐름, 핵심 가치, CTA를 보여주는 공개 랜딩페이지
+- `/quest`: 기존 냉장고 재료 입력 및 AI 퀘스트 생성 서비스
+- 랜딩페이지의 모든 주요 CTA는 `/quest`로 연결된다.
+- 랜딩과 서비스는 기존 FRIDGE QUEST의 크림색 배경, 초록색 포인트, 둥근 카드, 캐릭터 스타일을 공유한다.
+- 랜딩페이지는 설명과 진입을 담당하며, AI 요청·구조 판정·EXP 계산 로직은 `/quest`에 그대로 유지한다.
 
 ## 1. 목표
 
@@ -74,5 +82,7 @@ AI는 `priorityIngredients`를 우선 시도하지만 부자연스러우면 다�
 
 - Vercel 프로젝트: `arang2/fridge-quest`
 - Production: https://fridge-quest-liard.vercel.app
+- Landing: https://fridge-quest-liard.vercel.app/
+- Service: https://fridge-quest-liard.vercel.app/quest
 - `GEMINI_API_KEY`: Production, Preview, Development 환경에 등록
 - 명령: `pnpm deploy:preview`, `pnpm deploy`

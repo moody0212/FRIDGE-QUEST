@@ -2,7 +2,13 @@
 
 > 입력한 냉털 재료를 모두 구조 시도하되, 실제 레시피에 자연스럽게 사용하는 재료만 **구조 가능**으로 판정하는 AI 요리 퀘스트입니다.
 
-## 핵심 기능 (v2.1.0)
+## 핵심 기능 (v2.2.0)
+
+### 랜딩페이지 및 서비스 진입
+
+- `/`에서 FRIDGE QUEST의 목적, 사용 방법, 핵심 가치를 먼저 안내합니다.
+- 랜딩페이지의 `퀘스트 시작` CTA를 누르면 실제 냉장고 입력 서비스인 `/quest`로 이동합니다.
+- 랜딩과 서비스 모두 기존 크림색 배경, 초록색 포인트, 둥근 카드, 냉장고 구조대 캐릭터 톤앤매너를 공유합니다.
 
 1. **현실적인 구조 판정**
    - 모든 입력 재료는 구조 시도 대상입니다.
@@ -52,7 +58,9 @@ pnpm deploy:preview
 pnpm deploy
 ```
 
-프로덕션: https://fridge-quest-liard.vercel.app
+프로덕션 랜딩: https://fridge-quest-liard.vercel.app
+
+실제 서비스: https://fridge-quest-liard.vercel.app/quest
 
 `GEMINI_API_KEY`는 `.env` 또는 Vercel 환경변수에만 저장하며 저장소에 커밋하지 않습니다.
 
@@ -61,4 +69,5 @@ pnpm deploy
 - [개발 계획](docs/DEVELOPMENT_PLAN.md)
 - [QA 체크리스트](docs/QA_CHECKLIST.md)
 - [AI 프롬프트 및 응답 명세](docs/AI_PROMPT_SPEC.md)
+- [디자인 톤앤매너 및 랜딩페이지 계획](docs/DESIGN_TONE_AND_MANNER_PLAN.md)
 - [제품 요구사항](PRD.md)
