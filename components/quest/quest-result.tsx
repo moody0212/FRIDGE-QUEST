@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, Sparkles } from 'lucide-react'
+import { AlertTriangle, Sparkles, UtensilsCrossed } from 'lucide-react'
 import type { Quest, RescueItem } from '@/lib/quest-data'
 
 function Chip({ children, tone = 'plain' }: { children: string; tone?: 'plain' | 'good' | 'warn' | 'muted' }) {
@@ -38,7 +38,6 @@ function Group({
 
 export function QuestResult({
   quest,
-  allItems = [],
   onReroll,
   isRerolling,
 }: {
@@ -47,23 +46,22 @@ export function QuestResult({
   onReroll: () => void
   isRerolling?: boolean
 }) {
-  // 실제 조리 과정에서 사용된 냉털 재료
-  const usedList = quest.usedFridgeIngredients || quest.rescueUsed || []
-  // 전체 입력 재료 중 이번 레시피에서 사용하지 않은 남은 구조 대상
-  const remainingItems = allItems.filter((i) => !usedList.includes(i.name))
-  // EXP = usedFridgeIngredients 개수 × 100 (Code Level Calculation)
-  const calculatedExp = (usedList.length || 1) * 100
+  // 이번 퀘스트에서 모두 구조하는 입력 냉털 재료 목록
+  const questIngs = quest.questIngredients || quest.rescueUsed || []
+  // EXP = 사용자가 입력한 냉털 재료 개수 × 100
+  const calculatedExp = (questIngs.length || 1) * 100
+  const addUses = quest.additionalUses || []
 
   return (
     <section
       aria-live="polite"
       className="overflow-hidden rounded-3xl border-2 border-primary bg-card shadow-[0_6px_0_0_var(--primary)]"
     >
-      {/* 1. 이번 퀘스트 구조 대상 배너 */}
+      {/* 1. 구조 대상 배너 (입력한 냉털 재료 100% 전부 이번 퀘스트 대상) */}
       <div className="bg-destructive/10 px-5 py-3 text-center">
-        <p className="font-display text-xs tracking-[0.2em] text-destructive">🚨 구조 대상</p>
+        <p className="font-display text-xs tracking-[0.2em] text-destructive">🚨 이번 퀘스트 구조 대상</p>
         <p className="mt-1 font-display text-base font-medium">
-          🥬 {usedList.join(' · ') || quest.rescueTarget}를 먼저 구조해볼까요?
+          🥬 {questIngs.join(' · ')}를 모두 구조해볼까요?
         </p>
       </div>
 
@@ -79,25 +77,15 @@ export function QuestResult({
           ⏱ {quest.time}
         </p>
 
-        {/* 3. 재료 목록 (이번 퀘스트 사용 재료 / 남은 구조 대상 구분) */}
+        {/* 3. 재료 목록 (입력한 냉털 재료 모두 포함) */}
         <div className="mt-6 flex flex-col gap-4 rounded-2xl bg-muted/60 p-4">
-          <Group title="🧊 사용하는 냉털 재료 (이번 퀘스트)">
-            {usedList.map((name) => (
+          <Group title="🧊 이번 퀘스트 구조 재료 (전부 구조!)">
+            {questIngs.map((name) => (
               <Chip key={name} tone="good">
                 {name}
               </Chip>
             ))}
           </Group>
-
-          {remainingItems.length > 0 ? (
-            <Group title="🧊 아직 구조를 기다리고 있어요 (남은 재료)">
-              {remainingItems.map((item) => (
-                <Chip key={item.id} tone="muted">
-                  {item.name}
-                </Chip>
-              ))}
-            </Group>
-          ) : null}
 
           <Group title="🧂 사용하는 기본 재료">
             {quest.basicUsed.length === 0 ? (
@@ -135,6 +123,24 @@ export function QuestResult({
           </div>
         ) : null}
 
+        {/* 🥗 메인 요리 외 별도 곁들임 / 토핑 / 특수재료 안내 (해당 시) */}
+        {addUses.length > 0 ? (
+          <div className="mt-5 rounded-2xl border border-secondary bg-secondary/30 p-4 text-xs leading-relaxed">
+            <p className="flex items-center gap-1.5 font-display font-semibold text-secondary-foreground">
+              <UtensilsCrossed className="size-4 text-primary" />
+              <span>🥗 곁들임 & 별도 활용 안내 (100% 구조 완료)</span>
+            </p>
+            <ul className="mt-2.5 flex flex-col gap-2">
+              {addUses.map((item) => (
+                <li key={item.ingredient} className="rounded-xl bg-card p-3 border border-border/60">
+                  <span className="font-display font-semibold text-primary">[{item.ingredient}]</span>{' '}
+                  <span className="text-foreground">{item.usage}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         {/* 💡 요리 팁 안내 (해당 시) */}
         {quest.tip ? (
           <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-primary/30 bg-primary/5 p-3.5 text-xs leading-relaxed text-foreground">
@@ -165,10 +171,10 @@ export function QuestResult({
           </ol>
         </div>
 
-        {/* 게이미피케이션 보상 (EXP = usedFridgeIngredients.length × 100) */}
+        {/* 게이미피케이션 보상 (EXP = questIngredients.length × 100) */}
         <div className="mt-6 rounded-2xl border border-dashed border-primary/50 bg-secondary/60 p-4 text-center">
           <p className="font-display text-xs text-muted-foreground">🎯 이번 퀘스트 구조 대상</p>
-          <p className="mt-0.5 font-display text-base font-bold">{usedList.join(' · ') || quest.rescueTarget}</p>
+          <p className="mt-0.5 font-display text-base font-bold">{questIngs.join(' · ') || quest.rescueTarget}</p>
           <p className="mt-2 font-display text-sm font-semibold text-primary">🎮 요리를 완성하면 +{calculatedExp} EXP 획득 가능</p>
           <div
             className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-card"

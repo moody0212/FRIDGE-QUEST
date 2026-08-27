@@ -51,12 +51,19 @@ export const COOK_TIMES: { value: CookTime; label: string; emoji: string }[] = [
   { value: 'any', label: '상관없음', emoji: '🍲' },
 ]
 
+export type AdditionalUse = {
+  ingredient: string
+  usage: string
+}
+
 export type Quest = {
   rescueTarget: string
   dish: string
   time: string
-  usedFridgeIngredients: string[] // 레시피 조리 과정에서 실제 사용하는 냉털 재료
-  rescueUsed: string[]            // 기존 UI 호환용 (usedFridgeIngredients와 동일)
+  questIngredients: string[]       // 사용자가 입력한 모든 냉털 재료 원문 (전부 이번 퀘스트 대상)
+  mainDishIngredients: string[]    // 메인 요리에 실제 조리되는 냉털 재료
+  additionalUses?: AdditionalUse[] // 메인 요리 외 곁들임/사이드/별도 활용 안내
+  rescueUsed: string[]            // 기존 UI 호환용 (questIngredients와 동일)
   basicUsed: string[]
   extraNeeded: string[]
   steps: string[]
@@ -70,8 +77,9 @@ export const SAMPLE_QUESTS: Quest[] = [
     rescueTarget: '양배추',
     dish: '김치 양배추 계란볶음',
     time: '약 15분',
-    usedFridgeIngredients: ['양배추'],
-    rescueUsed: ['양배추'],
+    questIngredients: ['양배추', '계란'],
+    mainDishIngredients: ['양배추', '계란'],
+    rescueUsed: ['양배추', '계란'],
     basicUsed: ['김치', '대파', '마늘', '간장', '식용유'],
     extraNeeded: [],
     steps: [
@@ -81,6 +89,6 @@ export const SAMPLE_QUESTS: Quest[] = [
       '계란을 넣어 익힌다.',
       '간장으로 간을 맞춘다.',
     ],
-    exp: 100,
+    exp: 200,
   },
 ]
