@@ -14,17 +14,13 @@ import {
   type RescueItem,
 } from '@/lib/quest-data'
 
-const INITIAL_ITEMS: RescueItem[] = [
-  { id: 'r1', name: '양배추', status: 'soft' },
-  { id: 'r2', name: '계란', status: 'fresh' },
-  { id: 'r3', name: '두부', status: 'fresh' },
-]
+const INITIAL_ITEMS: RescueItem[] = []
 
 type Phase = 'idle' | 'loading' | 'success' | 'failure'
 
 export default function Page() {
   const [basics, setBasics] = useState<string[]>(['김치', '대파', '마늘', '간장', '식용유'])
-  const [items, setItems] = useState<RescueItem[]>(INITIAL_ITEMS)
+  const [items, setItems] = useState<RescueItem[]>([])
   const [cookTime, setCookTime] = useState<CookTime>('20')
   const [phase, setPhase] = useState<Phase>('idle')
   const [currentQuest, setCurrentQuest] = useState<Quest | null>(null)
