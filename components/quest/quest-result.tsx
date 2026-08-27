@@ -100,6 +100,17 @@ export function QuestResult({ quest, onReroll, isRerolling }: { quest: Quest; on
           </div>
         ) : null}
 
+        {/* 💡 요리 팁 안내 (해당 시) */}
+        {quest.tip ? (
+          <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-primary/30 bg-primary/5 p-3.5 text-xs leading-relaxed text-foreground">
+            <span className="shrink-0 text-sm">💡</span>
+            <div>
+              <p className="font-display font-semibold text-primary">TIP</p>
+              <p className="mt-0.5 text-muted-foreground">{quest.tip}</p>
+            </div>
+          </div>
+        ) : null}
+
         {/* 4. 5단계 이내 조리법 */}
         <div className="mt-6">
           <p className="font-display text-base">🍳 조리법</p>
