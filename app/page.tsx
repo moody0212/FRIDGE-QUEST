@@ -137,6 +137,9 @@ export default function Page() {
           items,
           cookTime,
           excludeDish: currentQuest.dish,
+          previousRecipeName: currentQuest.dish,
+          previousCookingMethod: currentQuest.dish,
+          previousUsedFridgeIngredients: currentQuest.usedFridgeIngredients || currentQuest.rescueUsed || [],
         }),
       })
 

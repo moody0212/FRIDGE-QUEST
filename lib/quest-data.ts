@@ -55,7 +55,8 @@ export type Quest = {
   rescueTarget: string
   dish: string
   time: string
-  rescueUsed: string[]
+  usedFridgeIngredients: string[] // 레시피 조리 과정에서 실제 사용하는 냉털 재료
+  rescueUsed: string[]            // 기존 UI 호환용 (usedFridgeIngredients와 동일)
   basicUsed: string[]
   extraNeeded: string[]
   steps: string[]
@@ -69,7 +70,8 @@ export const SAMPLE_QUESTS: Quest[] = [
     rescueTarget: '양배추',
     dish: '김치 양배추 계란볶음',
     time: '약 15분',
-    rescueUsed: ['양배추', '계란'],
+    usedFridgeIngredients: ['양배추'],
+    rescueUsed: ['양배추'],
     basicUsed: ['김치', '대파', '마늘', '간장', '식용유'],
     extraNeeded: [],
     steps: [
@@ -80,37 +82,5 @@ export const SAMPLE_QUESTS: Quest[] = [
       '간장으로 간을 맞춘다.',
     ],
     exp: 100,
-  },
-  {
-    rescueTarget: '양배추',
-    dish: '양배추 두부 스크램블',
-    time: '약 12분',
-    rescueUsed: ['양배추', '두부', '계란'],
-    basicUsed: ['대파', '소금', '식용유', '참기름'],
-    extraNeeded: [],
-    steps: [
-      '두부는 키친타월로 물기를 제거한다.',
-      '양배추를 얇게 채 썬다.',
-      '식용유에 대파를 볶아 향을 낸다.',
-      '두부를 으깨 넣고 계란과 함께 스크램블한다.',
-      '소금과 참기름으로 마무리한다.',
-    ],
-    exp: 120,
-  },
-  {
-    rescueTarget: '두부',
-    dish: '매콤 두부 양배추 덮밥',
-    time: '약 18분',
-    rescueUsed: ['두부', '양배추'],
-    basicUsed: ['김치', '고춧가루', '마늘', '간장', '설탕'],
-    extraNeeded: [],
-    steps: [
-      '두부를 큼직하게 썰어 겉면을 노릇하게 굽는다.',
-      '양배추와 김치를 채 썬다.',
-      '마늘과 고춧가루를 기름에 볶아 양념을 만든다.',
-      '양배추와 김치를 넣고 센 불에 볶는다.',
-      '간장과 설탕으로 간해 밥 위에 올린다.',
-    ],
-    exp: 90,
   },
 ]

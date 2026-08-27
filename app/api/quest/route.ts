@@ -6,10 +6,25 @@ interface RequestPayload {
   items: { name: string; status: 'fresh' | 'soft' | 'bad' }[]
   cookTime: '10' | '20' | 'any'
   excludeDish?: string
+  previousRecipeName?: string
+  previousCookingMethod?: string
+  previousUsedFridgeIngredients?: string[]
 }
 
 const BAD_ITEM_WARNING =
   '⚠️ 상태가 좋지 않은 식재료입니다. 냄새, 색, 곰팡이 등 실제 상태를 확인한 후 사용 여부를 결정해주세요.'
+
+const ADJECTIVES_TO_STRIP = ['매콤', '특제', '간단', '맛있는', '특별한', '초간단', '고소한', '노릇한', '담백한', '바삭']
+
+function stripAdjectives(dishName: string): string {
+  let cleaned = dishName.trim()
+  for (const adj of ADJECTIVES_TO_STRIP) {
+    if (cleaned.startsWith(adj)) {
+      cleaned = cleaned.replace(new RegExp(`^${adj}\\s*`), '').trim()
+    }
+  }
+  return cleaned
+}
 
 /**
  * Natural Korean particle generator to avoid "(을/를)", "(이/가)" brackets (Rule 5).
@@ -35,9 +50,6 @@ function attachJosa(word: string, type: '을/를' | '이/가' | '은/는' | '과
   }
 }
 
-/**
- * Rule 1: Ingredient Role Classifier
- */
 function isSauceOrSeasoning(name: string): boolean {
   const sauceKeywords = ['스리라차', '소스', '케첩', '마요네즈', '드레싱', '잼', '굴소스', '돈까스', '머스타드', '간장', '고춧가루', '설탕', '소금']
   return sauceKeywords.some((kw) => name.includes(kw))
@@ -57,9 +69,6 @@ function isPreparedFood(name: string): boolean {
   return preparedKeywords.some((kw) => name.includes(kw))
 }
 
-/**
- * Rule 1 & Rule 4: Generate specific natural preparation text per ingredient while strictly preserving exact user input name!
- */
 function getPreparationStep(itemName: string): string {
   if (itemName.includes('또띠아')) return `${itemName}는 접시 위에 평평하게 펴둔다.`
   if (itemName.includes('식빵')) return `${itemName}는 노릇하게 구울 준비를 한다.`
@@ -76,64 +85,89 @@ function getPreparationStep(itemName: string): string {
 }
 
 /**
- * Rule 6: Minimal AI Response Verification Engine
+ * Rule A-11: Response Verification Engine
  */
 function validateQuest(
   quest: Quest,
   requestItems: { name: string; status: string }[],
   requestBasics: string[],
+  previousRecipeName?: string,
+  previousUsedFridgeIngredients?: string[],
 ): { valid: boolean; reason?: string } {
   const inputNames = requestItems.map((i) => i.name)
+  const usedFridge = quest.usedFridgeIngredients || quest.rescueUsed || []
 
-  // A. Is rescueTarget one of the user's input items? (Exact match - Rule 1 & Rule 6A)
-  if (!inputNames.includes(quest.rescueTarget)) {
+  if (!Array.isArray(usedFridge) || usedFridge.length === 0) {
     return {
       valid: false,
-      reason: `구조 대상("${quest.rescueTarget}")이 사용자가 입력한 원문 재료 목록(${inputNames.join(', ')})과 다릅니다.`,
+      reason: 'usedFridgeIngredients 목록이 빈 배열이거나 유효하지 않습니다.',
     }
   }
 
-  // B. Are all rescueUsed items in inputNames? (Exact match - Rule 1 & Rule 6B & 6F)
-  for (const used of quest.rescueUsed) {
+  // 1. usedFridgeIngredients validation (Exact match with user input)
+  for (const used of usedFridge) {
     if (!inputNames.includes(used)) {
       return {
         valid: false,
-        reason: `사용하는 냉털 재료("${used}")가 사용자의 입력 원문(${inputNames.join(', ')})과 일치하지 않거나 임의 변경되었습니다.`,
+        reason: `usedFridgeIngredients의 "${used}"가 사용자가 입력한 원래 재료 원문 목록(${inputNames.join(', ')})에 존재하지 않거나 변경되었습니다.`,
       }
     }
   }
 
-  // C. Is rescueTarget included in rescueUsed?
-  if (!quest.rescueUsed.includes(quest.rescueTarget)) {
-    return {
-      valid: false,
-      reason: `구조 대상("${quest.rescueTarget}")이 실제 사용하는 냉털 재료 목록(${quest.rescueUsed.join(', ')})에 포함되어야 합니다.`,
+  // 2. Are usedFridgeIngredients actually used in steps?
+  const stepsJoined = quest.steps.join(' ')
+  for (const used of usedFridge) {
+    if (!stepsJoined.includes(used)) {
+      return {
+        valid: false,
+        reason: `usedFridgeIngredients에 지정된 "${used}"가 실제 조리법(steps) 과정에 등장하지 않았습니다.`,
+      }
     }
   }
 
-  // D. Are all basicUsed items in user's checked basics? (Rule 6C)
+  // 3. rescueTarget must be in usedFridgeIngredients
+  if (!usedFridge.includes(quest.rescueTarget)) {
+    return {
+      valid: false,
+      reason: `구조 대상("${quest.rescueTarget}")이 실제로 사용한 냉털 재료 목록(${usedFridge.join(', ')})에 포함되어야 합니다.`,
+    }
+  }
+
+  // 4. basicUsed validation
   for (const basic of quest.basicUsed) {
     if (!requestBasics.includes(basic)) {
       return {
         valid: false,
-        reason: `사용하는 기본 재료("${basic}")가 사용자가 체크한 기본 재료 목록에 없습니다.`,
+        reason: `사용하는 기본 재료("${basic}")가 사용자가 체크한 보유 기본 재료에 없습니다.`,
       }
     }
   }
 
-  // E. Check for invalid terms like "전자기레인지" or particle brackets "(을/를)" (Rule 5 & Rule 6G)
-  const fullText = `${quest.dish} ${quest.steps.join(' ')} ${quest.tip || ''}`
+  // 5. Typo and formatting checks
+  const fullText = `${quest.dish} ${stepsJoined} ${quest.tip || ''}`
   if (fullText.includes('전자기레인지')) {
     return {
       valid: false,
-      reason: '"전자기레인지"라는 오탈자 용어가 포함되어 있습니다. 올바른 표현인 "전자레인지"를 사용하세요.',
+      reason: '"전자기레인지"라는 잘못된 표현이 발견되었습니다. "전자레인지"로 표기하세요.',
     }
   }
 
   if (/\([을를이가은는과와]\)/.test(fullText)) {
     return {
       valid: false,
-      reason: '조사 괄호 표기 (을/를), (이/가) 등이 포함되어 있습니다. 괄호 없이 받침에 맞는 조사를 적용하세요.',
+      reason: '괄호 조사 (을/를) 표기가 감지되었습니다. 올바른 한글 문장 조사를 적용하세요.',
+    }
+  }
+
+  // 6. Reroll substantially different check (A-8)
+  if (previousRecipeName) {
+    const cleanCurrent = stripAdjectives(quest.dish)
+    const cleanPrev = stripAdjectives(previousRecipeName)
+    if (cleanCurrent === cleanPrev || quest.dish === previousRecipeName) {
+      return {
+        valid: false,
+        reason: `직전 추천 요리("${previousRecipeName}")와 실질적으로 동일한 요리입니다. 수식어만 변경하지 말고 전혀 다른 조리법이나 재료 조합을 선택하세요.`,
+      }
     }
   }
 
@@ -147,169 +181,169 @@ function generateFallbackQuest(
   basics: string[],
   items: { name: string; status: 'fresh' | 'soft' | 'bad' }[],
   cookTime: '10' | '20' | 'any',
-  excludeDish?: string,
+  previousRecipeName?: string,
+  previousUsedFridgeIngredients?: string[],
 ): Quest {
-  const softItems = items.filter((i) => i.status === 'soft')
+  // Priority sorting: bad > soft > fresh
+  const sortedItems = [...items].sort((a, b) => {
+    const score = (s: string) => (s === 'bad' ? 3 : s === 'soft' ? 2 : 1)
+    return score(b.status) - score(a.status)
+  })
+
+  // If rerolling, prioritize unused items from previous run
+  let candidates = sortedItems
+  if (previousUsedFridgeIngredients && previousUsedFridgeIngredients.length > 0) {
+    const unused = sortedItems.filter((i) => !previousUsedFridgeIngredients.includes(i.name))
+    if (unused.length > 0) {
+      candidates = unused
+    }
+  }
+
   const badItems = items.filter((i) => i.status === 'bad')
+  const warningMessage = badItems.length > 0 ? BAD_ITEM_WARNING : undefined
 
-  const hasBadItem = badItems.length > 0
-  const warningMessage = hasBadItem ? BAD_ITEM_WARNING : undefined
+  const carbItems = candidates.filter((i) => isBaseCarb(i.name))
+  const sauceItems = candidates.filter((i) => isSauceOrSeasoning(i.name))
+  const preparedItems = candidates.filter((i) => isPreparedFood(i.name))
+  const mainFoodItems = candidates.filter((i) => !isBaseCarb(i.name) && !isSauceOrSeasoning(i.name) && !isPreparedFood(i.name))
 
-  // Categorize ingredient roles
-  const carbItems = items.filter((i) => isBaseCarb(i.name))
-  const sauceItems = items.filter((i) => isSauceOrSeasoning(i.name))
-  const preparedItems = items.filter((i) => isPreparedFood(i.name))
-  const mainFoodItems = items.filter((i) => !isBaseCarb(i.name) && !isSauceOrSeasoning(i.name) && !isPreparedFood(i.name))
-
-  const targetItem = softItems[0] || items[0]
+  const targetItem = candidates[0] || items[0]
   const rescueTargetName = targetItem.name
 
   let dishName = ''
-  let rescueUsed: string[] = []
+  let usedFridgeIngredients: string[] = []
   let basicUsed: string[] = []
   let extraNeeded: string[] = []
   let steps: string[] = []
   let tip: string | undefined = undefined
 
-  // Rule 2 & 3: Multi-step Reasoning based on Roles
   if (carbItems.some((i) => i.name.includes('또띠아'))) {
-    // Tortilla Case: Wrap, Quesadilla, or Pizza (NEVER stir-fry!)
     const hasSauce = sauceItems.length > 0
     const sauceName = hasSauce ? sauceItems[0].name : ''
 
-    const candidates = [
+    const options = [
       { name: '매콤 계란 또띠아롤', type: 'roll' },
       { name: '김치 치즈 퀘사디아', type: 'quesadilla' },
-      { name: '바삭 또띠아 계란지단 피자', type: 'pizza' },
+      { name: '바삭 또띠아 피자', type: 'pizza' },
     ]
-    const chosen = excludeDish ? candidates.find((c) => c.name !== excludeDish) || candidates[0] : candidates[0]
-    dishName = chosen.name
+    const chosen = previousRecipeName
+      ? options.find((o) => stripAdjectives(o.name) !== stripAdjectives(previousRecipeName)) || options[1]
+      : options[0]
 
-    rescueUsed = items.map((i) => i.name)
-    basicUsed = ['식용유', '간장', '소금'].filter((b) => basics.includes(b))
+    dishName = chosen.name
+    usedFridgeIngredients = [carbItems[0].name]
+    if (hasSauce) usedFridgeIngredients.push(sauceName)
+
+    basicUsed = ['식용유', '소금'].filter((b) => basics.includes(b))
 
     if (chosen.type === 'roll') {
       extraNeeded = ['계란']
       steps = [
-        'STEP 1. 또띠아는 조리대에 평평하게 펴고 계란을 부드럽게 푼다.',
-        'STEP 2. 달군 팬에 식용유를 두르고 계란을 지단으로 노릇하게 구워낸다.',
-        'STEP 3. 또띠아 위에 구운 계란 지단을 얹는다.',
+        `STEP 1. ${carbItems[0].name}는 조리대에 평평하게 펴고 계란을 부드럽게 푼다.`,
+        'STEP 2. 달군 팬에 식용유를 두르고 계란 지단을 노릇하게 부쳐낸다.',
+        `STEP 3. ${carbItems[0].name} 위에 구운 계란 지단을 얹는다.`,
         hasSauce
-          ? `STEP 4. ${attachJosa(sauceName, '을/를')} 골고루 바르고 또띠아를 돌돌 단단하게 판다.`
-          : 'STEP 4. 취향껏 소스를 바르고 또띠아를 돌돌 단단하게 판다.',
+          ? `STEP 4. ${attachJosa(sauceName, '을/를')} 골고루 바르고 돌돌 단단하게 판다.`
+          : 'STEP 4. 취향껏 소스를 바르고 돌돌 단단하게 판다.',
         'STEP 5. 한 입 크기로 썰어 접시에 담아 완성한다.',
       ]
     } else {
       extraNeeded = ['모짜렐라 치즈']
       steps = [
-        'STEP 1. 또띠아 위에 속재료와 치즈를 골고루 올린다.',
-        'STEP 2. 또띠아를 반으로 접어 모양을 잡는다.',
-        'STEP 3. 달군 팬에 또띠아를 올리고 약불에서 은근하게 구워낸다.',
+        `STEP 1. ${carbItems[0].name} 위에 속재료와 치즈를 올린다.`,
+        `STEP 2. ${carbItems[0].name}를 반으로 접어 모양을 잡는다.`,
+        'STEP 3. 달군 팬에 약불로 은근하게 구워낸다.',
         'STEP 4. 치즈가 녹고 겉면이 바삭해지면 뒤집어 반대쪽도 구워준다.',
-        'STEP 5. 먹기 좋은 크기로 조각내어 따뜻할 때 섭취한다.',
+        'STEP 5. 조각내어 따뜻할 때 섭취한다.',
       ]
     }
   } else if (carbItems.some((i) => i.name.includes('식빵'))) {
-    // Toast / Sandwich (NEVER stir-fry!)
     dishName = '고소한 계란 토스트'
-    rescueUsed = items.map((i) => i.name)
+    usedFridgeIngredients = [carbItems[0].name]
     basicUsed = ['식용유', '설탕', '소금'].filter((b) => basics.includes(b))
     extraNeeded = ['계란']
     steps = [
-      'STEP 1. 식빵을 준비하고 계란을 부드럽게 푼다.',
-      'STEP 2. 팬에 식용유를 약간 두르고 식빵을 노릇하게 구워낸다.',
-      'STEP 3. 풀은 계란을 팬에 부어 두툼하게 익힌다.',
-      'STEP 4. 구운 식빵 사이에 계란을 넣고 취향껏 소스를 더한다.',
+      `STEP 1. ${carbItems[0].name}을 준비하고 계란을 부드럽게 푼다.`,
+      `STEP 2. 팬에 식용유를 두르고 ${carbItems[0].name}을 노릇하게 구워낸다.`,
+      'STEP 3. 계란을 팬에 부어 두툼하게 익힌다.',
+      `STEP 4. 구운 ${carbItems[0].name} 사이에 계란을 넣는다.`,
       'STEP 5. 반으로 잘라 따뜻하게 즐긴다.',
     ]
-  } else if (mainFoodItems.some((i) => i.name.includes('두부')) && (items.some((i) => i.name.includes('김치')) || basics.includes('김치'))) {
-    // Dubu-Kimchi (Fixed "전자기레인지" -> "전자레인지")
-    dishName = `담백한 ${rescueTargetName}김치`
-    rescueUsed = items.map((i) => i.name)
-    basicUsed = ['김치', '참기름', '깨', '식용유', '설탕'].filter((b) => basics.includes(b))
-    extraNeeded = []
-    steps = [
-      `STEP 1. ${rescueTargetName}는 한 입 크기로 썰어 끓는 물에 데치거나 전자레인지에 데운다.`,
-      'STEP 2. 김치는 먹기 좋은 크기로 쫑쫑 썰어둔다.',
-      'STEP 3. 팬에 식용유를 두르고 김치와 설탕을 넣어 볶는다.',
-      'STEP 4. 마지막에 참기름을 살짝 둘러 고소한 풍미를 낸다.',
-      `STEP 5. 따뜻한 ${rescueTargetName} 옆에 볶은 김치를 정갈하게 곁들여 완성한다.`,
-    ]
   } else {
-    // Meat / Veggies: Rotate between 구이, 전, 덮밥, 볶음
-    const primaryName = mainFoodItems[0]?.name || rescueTargetName
-    const secondaryName = mainFoodItems[1]?.name || ''
+    // Select 1 or 2 main ingredients actually used in steps
+    const primary = mainFoodItems[0] || targetItem
+    const secondary = mainFoodItems.find((i) => i.name !== primary.name)
 
-    const candidateForms = [
-      { name: secondaryName ? `${primaryName} ${secondaryName} 구이` : `노릇한 ${primaryName} 구이`, type: 'grill' },
-      { name: secondaryName ? `${primaryName} ${secondaryName}전` : `고소한 ${primaryName}전`, type: 'pancake' },
-      { name: secondaryName ? `${primaryName} ${secondaryName} 덮밥` : `간편 ${primaryName} 덮밥`, type: 'bowl' },
-      { name: secondaryName ? `${primaryName} ${secondaryName} 볶음` : `매콤 ${primaryName} 볶음`, type: 'stir-fry' },
+    usedFridgeIngredients = [primary.name]
+    if (secondary) usedFridgeIngredients.push(secondary.name)
+
+    const formOptions = [
+      { name: secondary ? `${primary.name} ${secondary.name} 구이` : `노릇한 ${primary.name} 구이`, type: 'grill' },
+      { name: secondary ? `${primary.name} ${secondary.name}전` : `고소한 ${primary.name}전`, type: 'pancake' },
+      { name: secondary ? `${primary.name} ${secondary.name} 덮밥` : `간편 ${primary.name} 덮밥`, type: 'bowl' },
+      { name: secondary ? `${primary.name} ${secondary.name} 볶음` : `매콤 ${primary.name} 볶음`, type: 'stir-fry' },
     ]
 
-    const chosenForm = excludeDish
-      ? candidateForms.find((c) => c.name !== excludeDish) || candidateForms[0]
-      : candidateForms[0]
+    const chosenForm = previousRecipeName
+      ? formOptions.find((f) => stripAdjectives(f.name) !== stripAdjectives(previousRecipeName)) || formOptions[1]
+      : formOptions[0]
 
     dishName = chosenForm.name
-    rescueUsed = mainFoodItems.map((i) => i.name)
-    if (rescueUsed.length === 0) rescueUsed = [rescueTargetName]
-
     basicUsed = ['식용유', '간장', '마늘', '대파', '참기름', '소금'].filter((b) => basics.includes(b))
     extraNeeded = []
 
     if (chosenForm.type === 'grill') {
       steps = [
-        `STEP 1. ${getPreparationStep(primaryName)}`,
+        `STEP 1. ${getPreparationStep(primary.name)}`,
         'STEP 2. 팬을 중불로 달구고 식용유를 살짝 둘러 준비한다.',
-        `STEP 3. 손질한 ${attachJosa(primaryName, '을/를')} 팬에 올려 노릇하게 구워낸다.`,
-        'STEP 4. 소금이나 간장으로 취향껏 간을 맞춘다.',
+        `STEP 3. 달군 팬에 손질한 ${attachJosa(primary.name, '을/를')} 올려 노릇하게 구워낸다.`,
+        secondary ? `STEP 4. ${attachJosa(secondary.name, '을/를')} 곁들여 함께 노릇하게 익힌다.` : 'STEP 4. 소금이나 간장으로 간을 맞춘다.',
         'STEP 5. 예쁜 접시에 담아내어 완성한다.',
       ]
     } else if (chosenForm.type === 'pancake') {
       steps = [
-        `STEP 1. ${getPreparationStep(primaryName)}`,
-        'STEP 2. 그릇에 계란이나 부침가루를 넣어 재료와 섞어 반죽을 만든다.',
-        'STEP 3. 달군 팬에 기름을 넉넉히 두르고 반죽을 한 숟가락씩 얹는다.',
-        'STEP 4. 중약불에서 앞뒤로 노릇바삭하게 부쳐낸다.',
-        'STEP 5. 키친타월에 기름을 빼고 간장과 함께 낸다.',
+        `STEP 1. ${getPreparationStep(primary.name)}`,
+        `STEP 2. 그릇에 계란을 풀고 ${attachJosa(primary.name, '을/를')} 넣어 섞는다.`,
+        'STEP 3. 달군 팬에 기름을 둘러 반죽을 올린다.',
+        'STEP 4. 앞뒤로 노릇하게 부쳐낸다.',
+        'STEP 5. 접시에 담아 완성한다.',
       ]
     } else if (chosenForm.type === 'bowl') {
       steps = [
-        `STEP 1. ${getPreparationStep(primaryName)}`,
-        'STEP 2. 팬에 식용유를 두르고 대파와 마늘을 볶아 향을 낸다.',
-        `STEP 3. ${attachJosa(primaryName, '을/를')} 넣어 볶다가 간장과 설탕으로 자작하게 양념한다.`,
+        `STEP 1. ${getPreparationStep(primary.name)}`,
+        'STEP 2. 팬에 식용유를 두르고 대파와 마늘을 볶는다.',
+        `STEP 3. ${attachJosa(primary.name, '을/를')} 넣어 볶다가 간장으로 간한다.`,
         'STEP 4. 따뜻한 밥을 그릇에 담는다.',
         'STEP 5. 밥 위에 조리한 재료를 얹어 덮밥으로 완성한다.',
       ]
     } else {
       steps = [
-        `STEP 1. ${getPreparationStep(primaryName)}`,
+        `STEP 1. ${getPreparationStep(primary.name)}`,
         'STEP 2. 달군 팬에 식용유를 약간 두른다.',
-        `STEP 3. ${attachJosa(primaryName, '을/를')} 넣고 센 불에서 빠르게 볶아낸다.`,
-        'STEP 4. 간장이나 소금으로 간을 맞춘다.',
-        'STEP 5. 불을 끄고 담아낸다.',
+        `STEP 3. ${attachJosa(primary.name, '을/를')} 넣고 빠르게 볶아낸다.`,
+        secondary ? `STEP 4. ${attachJosa(secondary.name, '을/를')} 넣고 함께 볶아 간한다.` : 'STEP 4. 간장이나 소금으로 간을 맞춘다.',
+        'STEP 5. 불을 끄고 예쁘게 담아낸다.',
       ]
     }
   }
 
-  // Prepared items tip
   if (preparedItems.length > 0) {
     const preparedNames = preparedItems.map((i) => i.name).join(', ')
-    tip = `${attachJosa(preparedNames, '은/는')} 이미 완성된 음식이므로 메인 조리에서 제외하고 곁들임 음식으로 추천합니다.`
+    tip = `${attachJosa(preparedNames, '은/는')} 이미 완성된 음식이므로 씻거나 조리하지 않고 곁들임 토핑으로 추천합니다.`
   }
 
   return {
     rescueTarget: rescueTargetName,
     dish: dishName,
     time: cookTime === '10' ? '약 10분' : '약 15분',
-    rescueUsed,
+    usedFridgeIngredients,
+    rescueUsed: usedFridgeIngredients,
     basicUsed,
     extraNeeded,
     steps: steps.slice(0, 5),
     tip,
     warningMessage,
-    exp: (rescueUsed.length || 1) * 100,
+    exp: (usedFridgeIngredients.length || 1) * 100,
   }
 }
 
@@ -324,7 +358,7 @@ async function callGeminiModel(model: string, apiKey: string, prompt: string): P
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             responseMimeType: 'application/json',
-            temperature: 0.5,
+            temperature: 0.7,
           },
         }),
       },
@@ -349,7 +383,17 @@ async function callGeminiModel(model: string, apiKey: string, prompt: string): P
 export async function POST(request: Request) {
   try {
     const body: RequestPayload = await request.json()
-    const { basics = [], items = [], cookTime = '20', excludeDish } = body
+    const {
+      basics = [],
+      items = [],
+      cookTime = '20',
+      excludeDish,
+      previousRecipeName,
+      previousCookingMethod,
+      previousUsedFridgeIngredients = [],
+    } = body
+
+    const lastRecipe = previousRecipeName || excludeDish
 
     // 1. Validation
     if (!Array.isArray(items) || items.length < 2) {
@@ -366,42 +410,51 @@ export async function POST(request: Request) {
       )
     }
 
-    // 2. Gemini LLM Handler with Response Verification & Single Retry
+    // 2. Gemini LLM Handler
     const geminiKey = process.env.GEMINI_API_KEY || process.env.FRIDGE_QUEST_AI_KEY
 
     if (geminiKey) {
-      const softList = items.filter((i) => i.status === 'soft').map((i) => i.name).join(', ')
       const badList = items.filter((i) => i.status === 'bad').map((i) => i.name).join(', ')
+      const softList = items.filter((i) => i.status === 'soft').map((i) => i.name).join(', ')
       const freshList = items.filter((i) => i.status === 'fresh').map((i) => i.name).join(', ')
 
-      const basePrompt = `당신은 냉장고 식재료 구조 퀘스트 마스터 AI 셰프입니다. 사용자가 입력한 냉장고 재료를 분석하여 실제로 먹을 수 있는 최적의 현실적 요리 1개를 추천하고 JSON으로 응답하세요.
+      const basePrompt = `당신은 냉장고 식재료 구조 퀘스트 마스터 AI 셰프입니다. 입력된 냉장고 재료 중 조리법에 실제로 사용할 재료만 선택하여 현실적인 요리를 1개 추천하고 JSON으로 응답하세요.
 
-[입력 데이터]
+[사용자 입력 데이터]
 - 보유 기본 재료: ${basics.length > 0 ? basics.join(', ') : '없음'}
-- 냉털 재료(시들거나 물러짐 🟡): ${softList || '없음'}
-- 냉털 재료(상태 많이 안 좋음 🔴): ${badList || '없음'}
-- 냉털 재료(신선함 🟢): ${freshList || '없음'}
+- 냉털 재료 (위급/상태나쁨 🔴 - 우선검토): ${badList || '없음'}
+- 냉털 재료 (물렁/시듦 🟡 - 우선구조): ${softList || '없음'}
+- 냉털 재료 (신선함 🟢): ${freshList || '없음'}
 - 조리 가능 시간: ${cookTime === '10' ? '10분 이내' : cookTime === '20' ? '20분 이내' : '상관없음'}
-${excludeDish ? `- 직전 추천 요리(동일/유사한 조리 형태 피할 것): ${excludeDish}` : ''}
+${
+  lastRecipe
+    ? `[🚨 재추천 요청 - 직전 요리 정보 피할 것]
+- 직전 추천 요리명: ${lastRecipe}
+- 직전 조리 방식: ${previousCookingMethod || '미정'}
+- 직전 사용 재료: ${previousUsedFridgeIngredients.join(', ') || '없음'}
+규칙: 직전 요리와 실질적으로 다른 조리 방식(예: 구이, 전, 덮밥, 찜 등)이나 직전 사용하지 않은 남은 재료를 우선 활용하세요.`
+    : ''
+}
 
-[절대 준수 원칙: 입력 재료명 보존 (Source of Truth)]
-1. 사용자가 입력한 냉털 재료명 원문("${items.map((i) => i.name).join(', ')}")을 절대 다른 단어로 임의 변경하지 마십시오.
-   - 예: "취두부" ➔ "취두부" (절대 "두부"로 변경 금지!)
-   - 예: "연두부" ➔ "연두부", "순두부" ➔ "순두부"
-   - 예: "엄마가 만든 감자샐러드" ➔ "엄마가 만든 감자샐러드"
-2. rescueTarget, rescueUsed의 문자열은 사용자의 입력 원문과 100% 토씨 하나 틀리지 않고 동일해야 합니다.
+[필수 규칙 A: usedFridgeIngredients와 실제 조리법 일치]
+1. usedFridgeIngredients 배열에는 이번 레시피의 조리 단계(steps)에서 실제로 사용 및 조리되는 냉털 재료명만 넣으세요.
+2. 입력된 냉털 재료를 억지로 모두 넣지 마세요! 실제 조리에 1~2개만 사용된다면 usedFridgeIngredients에도 그 1~2개만 넣어야 합니다.
+3. usedFridgeIngredients에 넣은 재료는 반드시 조리 과정(steps) 문장에 100% 명시적으로 등장해야 합니다.
 
-[조리 용어 및 표기 필수 규칙]
-1. 조리 용어 오탈자 절대 금지: "전자기레인지"라는 어색한 표현은 사용 금지하며, 반드시 "전자레인지"로 표기하십시오.
-2. 조리기구/조리 동작: 전자레인지, 프라이팬, 냄비, 에어프라이어, 오븐, 중불, 약불, 센 불, 데치다, 삶다, 굽다, 볶다, 찌다, 졸이다 표준 용어를 사용하십시오.
-3. 괄호 조사 표기 금지: "(을/를)", "(이/가)" 등 괄호 조사는 사용하지 말고 올바른 한글 문장 조사를 작성하십시오.
+[필수 규칙 B: 입력 재료명 원문 보존 (Source of Truth)]
+1. 사용자가 입력한 재료명 원문("${items.map((i) => i.name).join(', ')}")을 절대 변경하지 마십시오. (예: "취두부" ➔ "취두부", 절대 "두부"로 치환 금지)
+2. 완성된 음식(샐러드, 치킨 등)은 씻거나 볶지 말고 곁들임 토핑으로만 활용하세요.
+
+[필수 규칙 C: 조리 용어 및 표기]
+1. "전자기레인지" 사용 절대 금지 ➔ "전자레인지"로 작성하세요.
+2. "(을/를)" 과 같은 괄호 조사를 절대 쓰지 마세요.
 
 [JSON 응답 포맷]
 {
-  "rescueTarget": "주 구조 대상 재료명 (사용자 입력 원문과 100% 동일)",
-  "dish": "현실적이고 자연스러운 요리명",
+  "rescueTarget": "이번 레시피 주 구조 대상 재료명 (원문과 100% 일치)",
+  "dish": "자연스러운 요리명",
   "time": "약 15분",
-  "rescueUsed": ["실제 레시피에 사용된 냉털재료 (사용자 입력 원문과 100% 동일)"],
+  "usedFridgeIngredients": ["실제 steps 조리 과정에서 사용되는 냉털 재료원문"],
   "basicUsed": ["실제 사용된 보유 기본재료"],
   "extraNeeded": ["필수 추가 재료 (없으면 [])"],
   "steps": [
@@ -411,9 +464,8 @@ ${excludeDish ? `- 직전 추천 요리(동일/유사한 조리 형태 피할 �
     "STEP 4. ...",
     "STEP 5. ..."
   ],
-  "tip": "완성된 음식 또는 소스 활용 팁 (있을 경우만)",
-  "warningMessage": "🔴 재료 관련 경고문구(있을 경우만)",
-  "exp": 100
+  "tip": "활용 팁 (있을 경우만)",
+  "warningMessage": "🔴 재료 관련 경고문구(있을 경우만)"
 }`
 
       const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro']
@@ -423,27 +475,50 @@ ${excludeDish ? `- 직전 추천 요리(동일/유사한 조리 형태 피할 �
           let parsed = await callGeminiModel(model, geminiKey, basePrompt)
 
           if (parsed) {
-            let validation = validateQuest(parsed, items, basics)
+            // Ensure rescueUsed equals usedFridgeIngredients
+            parsed.usedFridgeIngredients = parsed.usedFridgeIngredients || parsed.rescueUsed || []
+            parsed.rescueUsed = parsed.usedFridgeIngredients
 
-            // Rule 7: Single retry on validation failure
+            let validation = validateQuest(
+              parsed,
+              items,
+              basics,
+              lastRecipe,
+              previousUsedFridgeIngredients,
+            )
+
+            // Rule A-12: Single retry on validation failure
             if (!validation.valid) {
               console.warn(`[AI Validation Failed on ${model}]: ${validation.reason}. Requesting 1-time retry...`)
 
               const retryPrompt = `${basePrompt}
 
-[🚨 1회 재시도 요청 - 검증 실패 수정 지침]
-직전 생성 결과가 다음 검증 실패 이유로 거부되었습니다:
+[🚨 1회 재시도 요청 - 검증 실패 원인 수정 지침]
+이전 응답이 다음 검증 이유로 거부되었습니다:
 "${validation.reason}"
 
-반드시 사용자가 입력한 재료명 원문("${items.map((i) => i.name).join(', ')}")을 100% 정확히 보존하고, "전자기레인지" 오탈자 및 괄호 조사를 제거하여 다시 정합성 있게 응답하십시오.`
+지침:
+1. usedFridgeIngredients에는 실제 steps 조리 과정에 100% 등장하는 재료명만 넣으세요.
+2. 입력 원문 재료명("${items.map((i) => i.name).join(', ')}")을 변경하지 마세요.
+3. 직전 추천 요리("${lastRecipe || '없음'}")와 실질적으로 다른 요리 형태를 만드세요.`
 
               parsed = await callGeminiModel(model, geminiKey, retryPrompt)
               if (parsed) {
-                validation = validateQuest(parsed, items, basics)
+                parsed.usedFridgeIngredients = parsed.usedFridgeIngredients || parsed.rescueUsed || []
+                parsed.rescueUsed = parsed.usedFridgeIngredients
+                validation = validateQuest(
+                  parsed,
+                  items,
+                  basics,
+                  lastRecipe,
+                  previousUsedFridgeIngredients,
+                )
               }
             }
 
             if (parsed && validation.valid) {
+              // Code calculates EXP strictly (A-10)
+              parsed.exp = (parsed.usedFridgeIngredients.length || 1) * 100
               return NextResponse.json(parsed)
             }
           }
@@ -453,9 +528,16 @@ ${excludeDish ? `- 직전 추천 요리(동일/유사한 조리 형태 피할 �
       }
     }
 
-    // 3. Fallback Synthesizer Engine (guaranteed exact name preservation & valid Korean terms)
-    const quest = generateFallbackQuest(basics, items, cookTime, excludeDish)
-    return NextResponse.json(quest)
+    // 3. Rule-based Fallback Synthesizer Engine
+    const fallbackQuest = generateFallbackQuest(
+      basics,
+      items,
+      cookTime,
+      lastRecipe,
+      previousUsedFridgeIngredients,
+    )
+    fallbackQuest.exp = (fallbackQuest.usedFridgeIngredients.length || 1) * 100
+    return NextResponse.json(fallbackQuest)
   } catch (error) {
     console.error('Error generating quest:', error)
     return NextResponse.json(
