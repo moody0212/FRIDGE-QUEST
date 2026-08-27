@@ -269,7 +269,7 @@ export async function POST(request: Request) {
     }
 
     // 2. Gemini LLM Handler
-    const geminiKey = process.env.GEMINI_API_KEY
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.FRIDGE_QUEST_AI_KEY
 
     if (geminiKey) {
       try {
