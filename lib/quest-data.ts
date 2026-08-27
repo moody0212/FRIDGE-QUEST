@@ -56,14 +56,21 @@ export type AdditionalUse = {
   usage: string
 }
 
+export type FailedIngredientReason = {
+  ingredient: string
+  reason: string
+}
+
 export type Quest = {
   rescueTarget: string
   dish: string
+  cookingMethod: string
   time: string
-  questIngredients: string[]       // 사용자가 입력한 모든 냉털 재료 원문 (전부 이번 퀘스트 대상)
-  mainDishIngredients: string[]    // 메인 요리에 실제 조리되는 냉털 재료
-  additionalUses?: AdditionalUse[] // 메인 요리 외 곁들임/사이드/별도 활용 안내
-  rescueUsed: string[]            // 기존 UI 호환용 (questIngredients와 동일)
+  allIngredients: string[]
+  rescuedIngredients: string[]
+  failedIngredients: string[]
+  failedIngredientReasons: FailedIngredientReason[]
+  additionalUses: AdditionalUse[]
   basicUsed: string[]
   extraNeeded: string[]
   steps: string[]
@@ -76,10 +83,13 @@ export const SAMPLE_QUESTS: Quest[] = [
   {
     rescueTarget: '양배추',
     dish: '김치 양배추 계란볶음',
+    cookingMethod: '볶음',
     time: '약 15분',
-    questIngredients: ['양배추', '계란'],
-    mainDishIngredients: ['양배추', '계란'],
-    rescueUsed: ['양배추', '계란'],
+    allIngredients: ['양배추', '계란'],
+    rescuedIngredients: ['양배추', '계란'],
+    failedIngredients: [],
+    failedIngredientReasons: [],
+    additionalUses: [],
     basicUsed: ['김치', '대파', '마늘', '간장', '식용유'],
     extraNeeded: [],
     steps: [

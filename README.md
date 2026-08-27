@@ -1,40 +1,58 @@
-# 🧊 FRIDGE QUEST (냉장고 식재료 구조 퀘스트)
+# 🧊 FRIDGE QUEST
 
-> **"내가 입력한 모든 냉털 재료"를 AI가 이번 퀘스트 한 끼 안에서 100% 완벽하게 구조(메인 요리 + 별도 곁들임/토핑/안내)해준다.**
+> 입력한 냉털 재료를 모두 구조 시도하되, 실제 레시피에 자연스럽게 사용하는 재료만 **구조 가능**으로 판정하는 AI 요리 퀘스트입니다.
 
----
+## 핵심 기능 (v2.0.0)
 
-## 📌 프로젝트 소개
-FRIDGE QUEST는 버려지기 직전의 냉장고 식재료를 게이미피케이션 요소와 AI 추천을 통해 하나의 요리 퀘스트로 변환하여 해결하는 5시간 MVP 서비스입니다.
+1. **현실적인 구조 판정**
+   - 모든 입력 재료는 구조 시도 대상입니다.
+   - 한 요리에 억지로 모두 섞지 않고 실제 조리법에 사용한 재료만 구조 가능으로 표시합니다.
+2. **명확한 데이터 분리**
+   - `allIngredients`: 사용자 원본 입력 전체
+   - `rescuedIngredients`: 현재 조리법에서 실제 사용하는 냉털 재료
+   - `failedIngredients`: 코드에서 `allIngredients - rescuedIngredients`로 계산한 미활용 재료
+3. **구조 실패 후속 행동**
+   - 실패는 폐기를 뜻하지 않습니다.
+   - 실패 이유와 기존 `🍽️ 곁들임 & 별도 활용 안내` 카드로 현실적인 다음 행동을 제공합니다.
+4. **원문 및 레시피 정합성 검증**
+   - `취두부`를 `두부`로 일반화하지 않습니다.
+   - 구조 가능 재료가 조리 단계에 실제 등장하는지 확인하고, 불일치하면 한 번만 재생성합니다.
+5. **게이미피케이션**
+   - `🔥 2/3 구조 가능!`처럼 현재 구조 가능 수를 표시합니다.
+   - EXP는 코드에서 `rescuedIngredients.length × 100`으로 계산하며 실제 저장하지 않습니다.
+6. **실패 재료 우선 재추천**
+   - 다른 요리 추천 시 직전 실패 재료를 `priorityIngredients`로 전달합니다.
+   - 수식어만 바꾼 동일 요리는 검증에서 차단합니다.
 
-### 🌟 핵심 기능 및 개정 정책 (v1.5.0)
-1. **단일 화면(SPA) 퀘스트 생성**: 기본 재료 체크, 냉털 재료/상태 입력, 조리시간 설정부터 AI 레시피 결과까지 한 화면에서 조작.
-2. **100% 전부 구조 정책 (All-Rescue)**:
-   - 입력한 모든 냉털 재료가 이번 퀘스트 대상 (`questIngredients`).
-   - 어울리는 재료는 메인 요리(`mainDishIngredients` & `steps`)에 사용하고, 어울리지 않는 재료(취두부, 딸기, 감자샐러드 등)는 억지로 팬에 함께 볶지 않고 곁들임/토핑/별도 안내(`additionalUses`)로 깔끔하게 분리 구조.
-3. **입력 재료명 원문 보존 (Source of Truth)**:
-   - `취두부` ➔ `취두부` (절대 `두부`로 임의 치환/일반화 금지).
-4. **EXP 코드 정밀 연산**:
-   - $\text{EXP} = \text{입력한 냉털 재료 개수} \times 100$. (코드 레벨 자동 연산)
-5. **게이미피케이션 & Reroll**:
-   - `🎯 이번 퀘스트 구조 대상` & `🎮 요리를 완성하면 +EXP 획득 가능` 게이지 카드 제공.
-   - `🔄 다른 요리 추천받기` 수식어 중복 차단 및 다변화 기능.
+## 기술 구성
 
----
+- Next.js 16.3.3 App Router
+- React 19, TypeScript, Tailwind CSS
+- Google Gemini API (`gemini-3.6-flash`, `gemini-2.5-flash` fallback)
+- Vercel CLI 및 Vercel 환경변수 배포
 
-## 📁 주요 문서 가이드 (`docs/`)
-- 🗺️ [개발 계획서 (DEVELOPMENT_PLAN.md)](file:///c:/IT%20test/docs/DEVELOPMENT_PLAN.md): v1.5.0 스프린트별 태스크 및 진행 상태 (100% 완료)
-- 🧪 [QA 테스트 체크리스트 (QA_CHECKLIST.md)](file:///c:/IT%20test/docs/QA_CHECKLIST.md): v1.5.0 30개 항목 전수 통과 (100% Pass)
-- 🤖 [AI 프롬프트 명세서 (AI_PROMPT_SPEC.md)](file:///c:/IT%20test/docs/AI_PROMPT_SPEC.md): v1.5.0 LLM 비즈니스 룰 및 Structured Output JSON 규격
-- 📑 [PRD.md](file:///c:/IT%20test/PRD.md): FRIDGE QUEST 최종 요구사항 정의서
+## 실행과 배포
 
----
-
-## 🚀 시작하기
-
-### 개발 서버 실행
 ```bash
-npm run dev
+pnpm install
+pnpm dev
 ```
 
-브라우저에서 `http://localhost:3000` 로 접속하여 서비스를 확인할 수 있습니다.
+```bash
+# Preview
+pnpm deploy:preview
+
+# Production
+pnpm deploy
+```
+
+프로덕션: https://fridge-quest-liard.vercel.app
+
+`GEMINI_API_KEY`는 `.env` 또는 Vercel 환경변수에만 저장하며 저장소에 커밋하지 않습니다.
+
+## 문서
+
+- [개발 계획](docs/DEVELOPMENT_PLAN.md)
+- [QA 체크리스트](docs/QA_CHECKLIST.md)
+- [AI 프롬프트 및 응답 명세](docs/AI_PROMPT_SPEC.md)
+- [제품 요구사항](PRD.md)

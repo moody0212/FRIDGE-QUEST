@@ -136,19 +136,25 @@ export default function Page() {
           basics,
           items,
           cookTime,
-          excludeDish: currentQuest.dish,
           previousRecipeName: currentQuest.dish,
-          previousCookingMethod: currentQuest.dish,
-          previousMainDishIngredients: currentQuest.mainDishIngredients || currentQuest.questIngredients || [],
+          previousCookingMethod: currentQuest.cookingMethod,
+          previousRescuedIngredients: currentQuest.rescuedIngredients,
+          previousFailedIngredients: currentQuest.failedIngredients,
+          priorityIngredients: currentQuest.failedIngredients,
         }),
       })
 
-      if (response.ok) {
-        const questData: Quest = await response.json()
-        setCurrentQuest(questData)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || '퀘스트 생성에 문제가 생겼어요. 다시 시도해주세요.')
       }
+
+      const questData: Quest = await response.json()
+      setCurrentQuest(questData)
     } catch (err) {
       console.error('Reroll failed:', err)
+      setErrorMessage(err instanceof Error ? err.message : '퀘스트 생성에 문제가 생겼어요. 다시 시도해주세요.')
+      setPhase('failure')
     } finally {
       setIsRerolling(false)
     }

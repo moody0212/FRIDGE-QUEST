@@ -1,30 +1,101 @@
-# 🤖 FRIDGE QUEST AI 프롬프트 명세서 (Prompt Specification)
+# 🤖 FRIDGE QUEST AI 프롬프트 및 응답 명세
 
-> **문서 목적**: PRD.md 및 "특수 식재료 임의 조리법 창작 금지 & 정갈한 별도 활용 안내" 규칙을 준수하는 AI 시스템 프롬프트 및 I/O 스키마 정의  
-> **문서 버전**: v1.6.0 (특수 식재료 임의 조리 창작 금지, 제품 포장 안내 유도 & UI 카드 문구 정정 반영)  
-> **최종 수정일**: 2026-08-27  
-> **관련 엔드포인트**: `/api/quest`  
+> **문서 버전**: v2.0.0
+>
+> **최종 수정일**: 2026-08-27
+>
+> **엔드포인트**: `POST /api/quest`
 
----
+## 1. 역할 분담
 
-## 1. 프롬프트 핵심 비즈니스 규칙 (Special Ingredients & Natural Usage)
+AI가 담당하는 값:
 
-1. **특수 식재료 임의 조리법 창작 금지 (NO Arbitrary Cooking)**:
-   - `취두부`, `낫토`, `피단`, `블루치즈` 등 발효/가공 특성이 특수한 재료에 대해 "두부니까 구워라/데워라"와 같은 임의 조리 동작을 창작하지 않는다.
-   - 확신이 부족할 경우 *"제품 포장의 조리·섭취 안내를 확인하신 후 적절히 곁들여주세요"*와 같이 안전하고 정갈한 제품 안내를 `additionalUses`로 제공한다.
-2. **이미 조리된 완제 음식 처리**:
-   - `감자샐러드`, `양념치킨`, `제육볶음` 등은 볶거나 씻지 않고 그대로 곁들이거나 차가운 토핑/안전한 재가열 안내로 구성한다.
-3. **UI 카드 문구 정정**:
-   - `(100% 구조 완료)`와 같은 미완성 상태의 완료 확정 문구를 제거하고 `🍽️ 곁들임 & 별도 활용 안내`로 표기한다.
+- 자연스러운 요리와 핵심 조리 방식
+- 실제 사용하는 `rescuedIngredients`
+- 최대 5개의 조리 단계
+- 실패 재료별 `failedIngredientReasons`
+- 실패 재료별 `additionalUses`
 
----
+코드가 담당하는 값:
 
-## 2. 입출력 스키마
+- `allIngredients`
+- `failedIngredients`
+- 구조 가능 개수
+- EXP
+- 사용자 원문 및 조리법 정합성 검증
+- 재추천 동일 요리 검증
 
-### 2.1 AdditionalUse Interface
-```typescript
-export interface AdditionalUse {
-  ingredient: string; // 예: "취두부"
-  usage: string;      // 예: "취두부는 제품마다 조리·섭취 방법이 다를 수 있으므로 제품 포장의 안내를 확인하신 후 활용해주세요."
+## 2. AI 응답 형식
+
+```ts
+interface AiQuest {
+  rescueTarget: string
+  dish: string
+  cookingMethod: string
+  time: string
+  rescuedIngredients: string[]
+  failedIngredientReasons: {
+    ingredient: string
+    reason: string
+  }[]
+  additionalUses: {
+    ingredient: string
+    usage: string
+  }[]
+  basicUsed: string[]
+  extraNeeded: string[]
+  steps: string[]
+  tip?: string
+  warningMessage?: string
 }
 ```
+
+AI 응답에는 `allIngredients`, `failedIngredients`, EXP, 구조 가능 비율을 포함하지 않는다.
+
+## 3. 생성 규칙
+
+1. 모든 입력 재료는 구조 시도 대상이지만 한 요리에 억지로 전부 넣지 않는다.
+2. `rescuedIngredients`에는 현재 `steps`에서 실제 사용하는 냉털 재료만 넣는다.
+3. 사용자 원문을 그대로 복사하며 일반화하거나 이름을 변경하지 않는다.
+4. 구조 가능 재료명을 `steps`에 원문 그대로 직접 쓴다.
+5. 사용하지 않은 각 입력 재료에 실패 이유와 별도 활용 안내를 하나씩 제공한다.
+6. 실패 이유는 현재 요리와의 궁합을 중심으로 짧은 한 문장으로 작성한다.
+7. 특수 식재료의 활용법에 확신이 없으면 임의 조리법을 만들지 않고 제품 포장의 조리·섭취 안내 확인을 권한다.
+8. `basicUsed`에는 사용자가 보유한 기본 재료만 넣는다.
+9. 재추천 시 `priorityIngredients`를 우선 검토하되 비현실적이면 다시 제외할 수 있다.
+10. 이전 요리와 이름 및 가능하면 핵심 조리 방식이 다른 요리를 생성한다.
+
+## 4. 서버 후처리
+
+```ts
+const failedIngredients = allIngredients.filter(
+  (name) => !rescuedIngredients.includes(name),
+)
+
+const exp = rescuedIngredients.length * 100
+```
+
+서버는 다음을 검증한다.
+
+- 구조 가능 이름이 사용자 원본에 존재하는가
+- 모든 구조 가능 이름이 `steps`에 등장하는가
+- 실패 이름이 `steps`에 등장하지 않는가
+- `failedIngredientReasons`와 `additionalUses`의 대상이 계산된 실패 목록과 일치하는가
+- `basicUsed`가 보유 기본 재료의 부분집합인가
+- 재추천 요리가 수식어만 변경한 동일 요리가 아닌가
+
+검증 실패 시 같은 입력으로 한 번만 재생성한다. 재생성도 실패하면 `퀘스트 생성에 문제가 생겼어요. 다시 시도해주세요.`를 반환한다.
+
+## 5. 재추천 요청
+
+```ts
+interface RerollContext {
+  previousRecipeName: string
+  previousCookingMethod: string
+  previousRescuedIngredients: string[]
+  previousFailedIngredients: string[]
+  priorityIngredients: string[]
+}
+```
+
+`priorityIngredients`는 직전 `failedIngredients`이며, 기존 사용자 입력과 설정은 그대로 유지한다.

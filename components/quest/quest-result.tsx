@@ -38,6 +38,7 @@ function Group({
 
 export function QuestResult({
   quest,
+  allItems,
   onReroll,
   isRerolling,
 }: {
@@ -46,11 +47,13 @@ export function QuestResult({
   onReroll: () => void
   isRerolling?: boolean
 }) {
-  // 이번 퀘스트에서 모두 구조하는 입력 냉털 재료 목록
-  const questIngs = quest.questIngredients || quest.rescueUsed || []
-  // EXP = 사용자가 입력한 냉털 재료 개수 × 100
-  const calculatedExp = (questIngs.length || 1) * 100
-  const addUses = quest.additionalUses || []
+  const allIngredients = allItems?.map((item) => item.name) ?? quest.allIngredients
+  const rescuedIngredients = quest.rescuedIngredients.filter((name) => allIngredients.includes(name))
+  const failedIngredients = allIngredients.filter((name) => !rescuedIngredients.includes(name))
+  const failedReasons = quest.failedIngredientReasons.filter((item) => failedIngredients.includes(item.ingredient))
+  const addUses = quest.additionalUses.filter((item) => failedIngredients.includes(item.ingredient))
+  const calculatedExp = rescuedIngredients.length * 100
+  const rescuedAll = rescuedIngredients.length === allIngredients.length
 
   return (
     <section
@@ -61,7 +64,7 @@ export function QuestResult({
       <div className="bg-destructive/10 px-5 py-3 text-center">
         <p className="font-display text-xs tracking-[0.2em] text-destructive">🚨 이번 퀘스트 구조 대상</p>
         <p className="mt-1 font-display text-base font-medium">
-          🥬 {questIngs.join(' · ')}를 모두 구조해볼까요?
+          🥬 {allIngredients.join(' · ')} 구조에 도전해볼까요?
         </p>
       </div>
 
@@ -77,14 +80,21 @@ export function QuestResult({
           ⏱ {quest.time}
         </p>
 
-        {/* 3. 재료 목록 (입력한 냉털 재료 모두 포함) */}
+        {/* 3. 구조 가능/실패 결과 */}
         <div className="mt-6 flex flex-col gap-4 rounded-2xl bg-muted/60 p-4">
-          <Group title="🧊 이번 퀘스트 구조 재료 (전부 구조!)">
-            {questIngs.map((name) => (
-              <Chip key={name} tone="good">
-                {name}
-              </Chip>
-            ))}
+          <Group title="🧊 이번 퀘스트 구조 결과">
+            <span className="w-full font-display text-sm font-semibold text-primary">
+              {rescuedAll ? '🎉' : '🔥'} {rescuedIngredients.length}/{allIngredients.length}{' '}
+              {rescuedAll ? '전부 구조 가능!' : '구조 가능!'}
+            </span>
+            {allIngredients.map((name) => {
+              const rescued = rescuedIngredients.includes(name)
+              return (
+                <Chip key={name} tone={rescued ? 'good' : 'muted'}>
+                  {rescued ? `✓ ${name}` : `💀 ${name}`}
+                </Chip>
+              )
+            })}
           </Group>
 
           <Group title="🧂 사용하는 기본 재료">
@@ -120,6 +130,20 @@ export function QuestResult({
           <div className="mt-5 flex items-start gap-2.5 rounded-2xl border border-destructive/30 bg-destructive/10 p-3.5 text-xs leading-relaxed text-destructive">
             <AlertTriangle className="size-4 shrink-0 mt-0.5" />
             <p>{quest.warningMessage}</p>
+          </div>
+        ) : null}
+
+        {failedReasons.length > 0 ? (
+          <div className="mt-5 flex flex-col gap-2">
+            {failedReasons.map((item, index) => (
+              <div key={item.ingredient} className="rounded-2xl border border-border bg-muted/50 p-3.5 text-xs leading-relaxed">
+                <p className="font-display font-semibold text-foreground">
+                  {index % 2 === 0 ? '💀' : '🧊'} {item.ingredient}{' '}
+                  {index % 2 === 0 ? '구조 실패!' : '이번 퀘스트에서 후퇴!'}
+                </p>
+                <p className="mt-1 text-muted-foreground">“{item.reason}”</p>
+              </div>
+            ))}
           </div>
         ) : null}
 
@@ -171,10 +195,10 @@ export function QuestResult({
           </ol>
         </div>
 
-        {/* 게이미피케이션 보상 (EXP = questIngredients.length × 100) */}
+        {/* 게이미피케이션 보상 (EXP = rescuedIngredients.length × 100) */}
         <div className="mt-6 rounded-2xl border border-dashed border-primary/50 bg-secondary/60 p-4 text-center">
-          <p className="font-display text-xs text-muted-foreground">🎯 이번 퀘스트 구조 대상</p>
-          <p className="mt-0.5 font-display text-base font-bold">{questIngs.join(' · ') || quest.rescueTarget}</p>
+          <p className="font-display text-xs text-muted-foreground">🎯 이번 퀘스트 구조 가능 재료</p>
+          <p className="mt-0.5 font-display text-base font-bold">{rescuedIngredients.join(' · ') || quest.rescueTarget}</p>
           <p className="mt-2 font-display text-sm font-semibold text-primary">🎮 요리를 완성하면 +{calculatedExp} EXP 획득 가능</p>
           <div
             className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-card"
