@@ -1,9 +1,9 @@
 'use client'
 
 import { AlertTriangle, Sparkles } from 'lucide-react'
-import type { Quest } from '@/lib/quest-data'
+import type { Quest, RescueItem } from '@/lib/quest-data'
 
-function Chip({ children, tone = 'plain' }: { children: string; tone?: 'plain' | 'good' | 'warn' }) {
+function Chip({ children, tone = 'plain' }: { children: string; tone?: 'plain' | 'good' | 'warn' | 'muted' }) {
   return (
     <span
       className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -11,7 +11,9 @@ function Chip({ children, tone = 'plain' }: { children: string; tone?: 'plain' |
           ? 'bg-secondary text-secondary-foreground'
           : tone === 'warn'
             ? 'bg-warning/20 text-warning-foreground border border-warning/30'
-            : 'border border-border bg-card text-foreground'
+            : tone === 'muted'
+              ? 'bg-muted text-muted-foreground border border-border/50 opacity-80'
+              : 'border border-border bg-card text-foreground'
       }`}
     >
       {children}
@@ -34,7 +36,22 @@ function Group({
   )
 }
 
-export function QuestResult({ quest, onReroll, isRerolling }: { quest: Quest; onReroll: () => void; isRerolling?: boolean }) {
+export function QuestResult({
+  quest,
+  allItems = [],
+  onReroll,
+  isRerolling,
+}: {
+  quest: Quest
+  allItems?: RescueItem[]
+  onReroll: () => void
+  isRerolling?: boolean
+}) {
+  // 이번 퀘스트에서 사용하지 않고 남은 전체 구조 대상 계산
+  const remainingItems = allItems.filter((i) => !quest.rescueUsed.includes(i.name))
+  // EXP 계산: 이번 퀘스트 구조 대상 개수 × 100
+  const calculatedExp = (quest.rescueUsed.length || 1) * 100
+
   return (
     <section
       aria-live="polite"
@@ -43,7 +60,9 @@ export function QuestResult({ quest, onReroll, isRerolling }: { quest: Quest; on
       {/* 1. 구조 대상 배너 */}
       <div className="bg-destructive/10 px-5 py-3 text-center">
         <p className="font-display text-xs tracking-[0.2em] text-destructive">🚨 구조 대상</p>
-        <p className="mt-1 font-display text-base">🥬 {quest.rescueTarget}를 먼저 구조해볼까요?</p>
+        <p className="mt-1 font-display text-base">
+          🥬 {quest.rescueUsed.join(' · ') || quest.rescueTarget}를 먼저 구조해볼까요?
+        </p>
       </div>
 
       <div className="px-5 py-6">
@@ -60,13 +79,23 @@ export function QuestResult({ quest, onReroll, isRerolling }: { quest: Quest; on
 
         {/* 3. 재료 목록 */}
         <div className="mt-6 flex flex-col gap-4 rounded-2xl bg-muted/60 p-4">
-          <Group title="🧊 사용하는 냉털 재료">
+          <Group title="🧊 사용하는 냉털 재료 (이번 퀘스트)">
             {quest.rescueUsed.map((name) => (
               <Chip key={name} tone="good">
                 {name}
               </Chip>
             ))}
           </Group>
+
+          {remainingItems.length > 0 ? (
+            <Group title="🧊 아직 구조를 기다리고 있어요 (남은 재료)">
+              {remainingItems.map((item) => (
+                <Chip key={item.id} tone="muted">
+                  {item.name}
+                </Chip>
+              ))}
+            </Group>
+          ) : null}
 
           <Group title="🧂 사용하는 기본 재료">
             {quest.basicUsed.length === 0 ? (
@@ -80,7 +109,11 @@ export function QuestResult({ quest, onReroll, isRerolling }: { quest: Quest; on
             {quest.extraNeeded.length === 0 ? (
               <Chip tone="good">없음</Chip>
             ) : (
-              quest.extraNeeded.map((name) => <Chip key={name} tone="warn">{name}</Chip>)
+              quest.extraNeeded.map((name) => (
+                <Chip key={name} tone="warn">
+                  {name}
+                </Chip>
+              ))
             )}
           </Group>
 
@@ -130,18 +163,19 @@ export function QuestResult({ quest, onReroll, isRerolling }: { quest: Quest; on
           </ol>
         </div>
 
-        {/* 게이미피케이션 보상 */}
+        {/* 게이미피케이션 보상 (EXP = 이번 퀘스트 구조 대상 수 × 100) */}
         <div className="mt-6 rounded-2xl border border-dashed border-primary/50 bg-secondary/60 p-4 text-center">
-          <p className="font-display text-base">🎉 {quest.rescueTarget} 구조 성공!</p>
-          <p className="mt-1 font-display text-sm text-primary">+{quest.exp} EXP</p>
+          <p className="font-display text-xs text-muted-foreground">🎯 이번 퀘스트 구조 대상</p>
+          <p className="mt-0.5 font-display text-base font-bold">{quest.rescueUsed.join(' · ') || quest.rescueTarget}</p>
+          <p className="mt-2 font-display text-sm font-semibold text-primary">🎮 요리를 완성하면 +{calculatedExp} EXP 획득 가능</p>
           <div
             className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-card"
             role="img"
-            aria-label={`구조 경험치 ${quest.exp} 포인트 획득`}
+            aria-label={`구조 경험치 ${calculatedExp} 포인트 획득 가능`}
           >
             <div
               className="h-full rounded-full bg-primary transition-all duration-700"
-              style={{ width: `${Math.min(100, quest.exp / 1.5 + 20)}%` }}
+              style={{ width: `${Math.min(100, calculatedExp / 3 + 20)}%` }}
             />
           </div>
         </div>
@@ -171,7 +205,7 @@ export function QuestFailure({ onRetry, message }: { onRetry: () => void; messag
       </p>
       <p className="mt-3 font-display text-lg">🤖 AI 요리사가 퀘스트를 만들지 못했어요.</p>
       <p className="mt-1 text-sm text-muted-foreground">
-        {message || '잠시 후 다시 시도해주세요. 기존 입력값은 모두 유지됩니다.'}
+        {message || '퀘스트 생성에 문제가 생겼어요. 다시 시도해주세요.'}
       </p>
       <button
         type="button"
@@ -183,4 +217,3 @@ export function QuestFailure({ onRetry, message }: { onRetry: () => void; messag
     </section>
   )
 }
-

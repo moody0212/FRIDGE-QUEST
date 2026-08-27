@@ -58,17 +58,17 @@ function isPreparedFood(name: string): boolean {
 }
 
 /**
- * Rule 4: Generate specific natural preparation text per ingredient
+ * Rule 1 & Rule 4: Generate specific natural preparation text per ingredient while strictly preserving exact user input name!
  */
 function getPreparationStep(itemName: string): string {
-  if (itemName.includes('또띠아')) return '또띠아는 접시 위에 평평하게 펴둔다.'
-  if (itemName.includes('식빵')) return '식빵은 노릇하게 구울 준비를 한다.'
-  if (itemName.includes('양파')) return '양파는 껍질을 벗겨 얇게 채 썬다.'
-  if (itemName.includes('삼겹살') || itemName.includes('돼지고기')) return '삼겹살은 먹기 좋은 크기로 자른다.'
+  if (itemName.includes('또띠아')) return `${itemName}는 접시 위에 평평하게 펴둔다.`
+  if (itemName.includes('식빵')) return `${itemName}는 노릇하게 구울 준비를 한다.`
+  if (itemName.includes('양파')) return `${itemName}는 껍질을 벗겨 얇게 채 썬다.`
+  if (itemName.includes('삼겹살') || itemName.includes('돼지고기')) return `${itemName}는 먹기 좋은 크기로 자른다.`
   if (itemName.includes('소고기') || itemName.includes('닭고기')) return `${attachJosa(itemName, '은/는')} 한 입 크기로 토막 낸다.`
-  if (itemName.includes('계란') || itemName.includes('달걀')) return '계란은 그릇에 깨뜨려 부드럽게 푼다.'
-  if (itemName.includes('두부')) return '두부는 키친타월로 물기를 제거하고 한 입 크기로 자른다.'
-  if (itemName.includes('김치')) return '김치는 한 입 크기로 썰어 준비한다.'
+  if (itemName.includes('계란') || itemName.includes('달걀')) return `${itemName}는 그릇에 깨뜨려 부드럽게 푼다.`
+  if (itemName.includes('두부')) return `${itemName}는 키친타월로 물기를 제거하고 한 입 크기로 자른다.`
+  if (itemName.includes('김치')) return `${itemName}는 한 입 크기로 썰어 준비한다.`
   if (itemName.includes('양배추') || itemName.includes('배추')) return `${attachJosa(itemName, '은/는')} 얇게 채 썬다.`
   if (itemName.includes('버섯')) return `${attachJosa(itemName, '은/는')} 밑동을 잘라내고 손질한다.`
   if (isSauceOrSeasoning(itemName)) return `${attachJosa(itemName, '은/는')} 양념 소스로 따로 준비해둔다.`
@@ -76,7 +76,72 @@ function getPreparationStep(itemName: string): string {
 }
 
 /**
- * Intelligent Multi-step Reasoning Recipe Synthesizer for FRIDGE QUEST
+ * Rule 6: Minimal AI Response Verification Engine
+ */
+function validateQuest(
+  quest: Quest,
+  requestItems: { name: string; status: string }[],
+  requestBasics: string[],
+): { valid: boolean; reason?: string } {
+  const inputNames = requestItems.map((i) => i.name)
+
+  // A. Is rescueTarget one of the user's input items? (Exact match - Rule 1 & Rule 6A)
+  if (!inputNames.includes(quest.rescueTarget)) {
+    return {
+      valid: false,
+      reason: `구조 대상("${quest.rescueTarget}")이 사용자가 입력한 원문 재료 목록(${inputNames.join(', ')})과 다릅니다.`,
+    }
+  }
+
+  // B. Are all rescueUsed items in inputNames? (Exact match - Rule 1 & Rule 6B & 6F)
+  for (const used of quest.rescueUsed) {
+    if (!inputNames.includes(used)) {
+      return {
+        valid: false,
+        reason: `사용하는 냉털 재료("${used}")가 사용자의 입력 원문(${inputNames.join(', ')})과 일치하지 않거나 임의 변경되었습니다.`,
+      }
+    }
+  }
+
+  // C. Is rescueTarget included in rescueUsed?
+  if (!quest.rescueUsed.includes(quest.rescueTarget)) {
+    return {
+      valid: false,
+      reason: `구조 대상("${quest.rescueTarget}")이 실제 사용하는 냉털 재료 목록(${quest.rescueUsed.join(', ')})에 포함되어야 합니다.`,
+    }
+  }
+
+  // D. Are all basicUsed items in user's checked basics? (Rule 6C)
+  for (const basic of quest.basicUsed) {
+    if (!requestBasics.includes(basic)) {
+      return {
+        valid: false,
+        reason: `사용하는 기본 재료("${basic}")가 사용자가 체크한 기본 재료 목록에 없습니다.`,
+      }
+    }
+  }
+
+  // E. Check for invalid terms like "전자기레인지" or particle brackets "(을/를)" (Rule 5 & Rule 6G)
+  const fullText = `${quest.dish} ${quest.steps.join(' ')} ${quest.tip || ''}`
+  if (fullText.includes('전자기레인지')) {
+    return {
+      valid: false,
+      reason: '"전자기레인지"라는 오탈자 용어가 포함되어 있습니다. 올바른 표현인 "전자레인지"를 사용하세요.',
+    }
+  }
+
+  if (/\([을를이가은는과와]\)/.test(fullText)) {
+    return {
+      valid: false,
+      reason: '조사 괄호 표기 (을/를), (이/가) 등이 포함되어 있습니다. 괄호 없이 받침에 맞는 조사를 적용하세요.',
+    }
+  }
+
+  return { valid: true }
+}
+
+/**
+ * Intelligent Rule-based Recipe Synthesizer for FRIDGE QUEST
  */
 function generateFallbackQuest(
   basics: string[],
@@ -152,23 +217,23 @@ function generateFallbackQuest(
     extraNeeded = ['계란']
     steps = [
       'STEP 1. 식빵을 준비하고 계란을 부드럽게 푼다.',
-      'STEP 2. 팬에 식용유를 약간 두르고 식빵 노릇하게 구워낸다.',
+      'STEP 2. 팬에 식용유를 약간 두르고 식빵을 노릇하게 구워낸다.',
       'STEP 3. 풀은 계란을 팬에 부어 두툼하게 익힌다.',
       'STEP 4. 구운 식빵 사이에 계란을 넣고 취향껏 소스를 더한다.',
       'STEP 5. 반으로 잘라 따뜻하게 즐긴다.',
     ]
   } else if (mainFoodItems.some((i) => i.name.includes('두부')) && (items.some((i) => i.name.includes('김치')) || basics.includes('김치'))) {
-    // Dubu-Kimchi
-    dishName = '담백한 두부김치'
+    // Dubu-Kimchi (Fixed "전자기레인지" -> "전자레인지")
+    dishName = `담백한 ${rescueTargetName}김치`
     rescueUsed = items.map((i) => i.name)
     basicUsed = ['김치', '참기름', '깨', '식용유', '설탕'].filter((b) => basics.includes(b))
     extraNeeded = []
     steps = [
-      'STEP 1. 두부는 한 입 크기로 썰어 끓는 물에 데치거나 전자기레인지에 데운다.',
+      `STEP 1. ${rescueTargetName}는 한 입 크기로 썰어 끓는 물에 데치거나 전자레인지에 데운다.`,
       'STEP 2. 김치는 먹기 좋은 크기로 쫑쫑 썰어둔다.',
       'STEP 3. 팬에 식용유를 두르고 김치와 설탕을 넣어 볶는다.',
       'STEP 4. 마지막에 참기름을 살짝 둘러 고소한 풍미를 낸다.',
-      'STEP 5. 따뜻한 두부 옆에 볶은 김치를 정갈하게 곁들여 완성한다.',
+      `STEP 5. 따뜻한 ${rescueTargetName} 옆에 볶은 김치를 정갈하게 곁들여 완성한다.`,
     ]
   } else {
     // Meat / Veggies: Rotate between 구이, 전, 덮밥, 볶음
@@ -244,8 +309,41 @@ function generateFallbackQuest(
     steps: steps.slice(0, 5),
     tip,
     warningMessage,
-    exp: softItems.length > 0 ? 120 : hasBadItem ? 80 : 100,
+    exp: (rescueUsed.length || 1) * 100,
   }
+}
+
+async function callGeminiModel(model: string, apiKey: string, prompt: string): Promise<Quest | null> {
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.5,
+          },
+        }),
+      },
+    )
+
+    if (res.ok) {
+      const data = await res.json()
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text
+      if (rawText) {
+        const parsed = JSON.parse(rawText) as Quest
+        if (parsed.dish && parsed.rescueTarget && Array.isArray(parsed.steps)) {
+          return parsed
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`Model ${model} execution error:`, err)
+  }
+  return null
 }
 
 export async function POST(request: Request) {
@@ -268,16 +366,15 @@ export async function POST(request: Request) {
       )
     }
 
-    // 2. Gemini LLM Handler
+    // 2. Gemini LLM Handler with Response Verification & Single Retry
     const geminiKey = process.env.GEMINI_API_KEY || process.env.FRIDGE_QUEST_AI_KEY
 
     if (geminiKey) {
-      try {
-        const softList = items.filter((i) => i.status === 'soft').map((i) => i.name).join(', ')
-        const badList = items.filter((i) => i.status === 'bad').map((i) => i.name).join(', ')
-        const freshList = items.filter((i) => i.status === 'fresh').map((i) => i.name).join(', ')
+      const softList = items.filter((i) => i.status === 'soft').map((i) => i.name).join(', ')
+      const badList = items.filter((i) => i.status === 'bad').map((i) => i.name).join(', ')
+      const freshList = items.filter((i) => i.status === 'fresh').map((i) => i.name).join(', ')
 
-        const prompt = `당신은 냉장고 식재료 구조 퀘스트 마스터 AI 셰프입니다. 입력된 냉장고 재료를 분석하여 실제로 먹을 수 있는 최적의 현실적 요리 1개를 추천하고 JSON으로 응답하세요.
+      const basePrompt = `당신은 냉장고 식재료 구조 퀘스트 마스터 AI 셰프입니다. 사용자가 입력한 냉장고 재료를 분석하여 실제로 먹을 수 있는 최적의 현실적 요리 1개를 추천하고 JSON으로 응답하세요.
 
 [입력 데이터]
 - 보유 기본 재료: ${basics.length > 0 ? basics.join(', ') : '없음'}
@@ -287,42 +384,24 @@ export async function POST(request: Request) {
 - 조리 가능 시간: ${cookTime === '10' ? '10분 이내' : cookTime === '20' ? '20분 이내' : '상관없음'}
 ${excludeDish ? `- 직전 추천 요리(동일/유사한 조리 형태 피할 것): ${excludeDish}` : ''}
 
-[절대 준수 레시피 생성 사고 단계]
+[절대 준수 원칙: 입력 재료명 보존 (Source of Truth)]
+1. 사용자가 입력한 냉털 재료명 원문("${items.map((i) => i.name).join(', ')}")을 절대 다른 단어로 임의 변경하지 마십시오.
+   - 예: "취두부" ➔ "취두부" (절대 "두부"로 변경 금지!)
+   - 예: "연두부" ➔ "연두부", "순두부" ➔ "순두부"
+   - 예: "엄마가 만든 감자샐러드" ➔ "엄마가 만든 감자샐러드"
+2. rescueTarget, rescueUsed의 문자열은 사용자의 입력 원문과 100% 토씨 하나 틀리지 않고 동일해야 합니다.
 
-STEP A. [재료 역할 내부 분류]
-- 단백질/주재료 (삼겹살, 계란, 두부 등)
-- 베이스/곡물 (또띠아, 식빵, 밥, 면 등)
-- 소스/양념 (스리라차 소스, 케첩, 마요네즈, 간장 등)
-- 조리완료 음식 (샐러드, 남은 치킨 등)
-
-STEP B. ["볶음" 기본값 절대 사용 금지!]
-- 팬에서 구울 수 있다고 해서 습관적으로 "○○ 볶음"을 만들지 마십시오.
-- 특히 또띠아, 식빵, 샐러드, 소스류, 조리완료 음식은 "볶음"이 금지됩니다.
-- 자연스러운 요리 형태 후보(랩, 롤, 퀘사디아, 토스트, 샌드위치, 전, 덮밥, 구이, 조림, 오믈렛, 볶음밥 등) 중 가장 어울리는 1개를 선택하세요.
-  예: 또띠아 + 스리라차 소스 → '매콤 계란 또띠아롤' (스리라차는 소스로 사용, 필요 시 계란을 extraNeeded에 추가)
-  예: 또띠아 + 김치 → '김치 치즈 퀘사디아'
-  예: 식빵 + 계란 → '계란 토스트'
-
-STEP C. [소스/양념명 요리명 명사 결합 금지]
-- 스리라차 소스, 마요네즈 등의 소스를 요리 이름의 주재료 명사로 결합하지 마세요. (예: "또띠아 스리라차 소스 볶음" X)
-- 소스는 레시피 과정에서 양념/드레싱으로 활용하세요.
-
-STEP D. [현실적 요리 품질 우선]
-- 보유 재료만으로 완벽한 요리가 어렵다면 "매콤 계란 또띠아롤"처럼 필수 재료(계란 등)를 extraNeeded에 추가하여 실제 먹을 수 있는 요리를 만드세요.
-- 추가 필요 재료 0개를 위해 괴상한 억지 요리를 만드는 것을 금지합니다.
-
-STEP E. [조사 괄호 표기 절대 금지]
-- "(을/를)", "(이/가)", "(은/는)" 과 같은 괄호 조사를 절대 출력하지 말고 올바른 한글 조사를 적용하세요.
-
-STEP F. [조리법 서술]
-- 요리 형태(랩, 전, 덮밥, 토스트 등)에 맞는 실제 조리 동작으로 최대 5단계를 구성하세요.
+[조리 용어 및 표기 필수 규칙]
+1. 조리 용어 오탈자 절대 금지: "전자기레인지"라는 어색한 표현은 사용 금지하며, 반드시 "전자레인지"로 표기하십시오.
+2. 조리기구/조리 동작: 전자레인지, 프라이팬, 냄비, 에어프라이어, 오븐, 중불, 약불, 센 불, 데치다, 삶다, 굽다, 볶다, 찌다, 졸이다 표준 용어를 사용하십시오.
+3. 괄호 조사 표기 금지: "(을/를)", "(이/가)" 등 괄호 조사는 사용하지 말고 올바른 한글 문장 조사를 작성하십시오.
 
 [JSON 응답 포맷]
 {
-  "rescueTarget": "주 구조 대상 재료명",
+  "rescueTarget": "주 구조 대상 재료명 (사용자 입력 원문과 100% 동일)",
   "dish": "현실적이고 자연스러운 요리명",
   "time": "약 15분",
-  "rescueUsed": ["실제 레시피에 사용된 냉털재료"],
+  "rescueUsed": ["실제 레시피에 사용된 냉털재료 (사용자 입력 원문과 100% 동일)"],
   "basicUsed": ["실제 사용된 보유 기본재료"],
   "extraNeeded": ["필수 추가 재료 (없으면 [])"],
   "steps": [
@@ -337,45 +416,44 @@ STEP F. [조리법 서술]
   "exp": 100
 }`
 
-        const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro']
+      const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro']
 
-        for (const model of models) {
-          try {
-            const res = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  contents: [{ parts: [{ text: prompt }] }],
-                  generationConfig: {
-                    responseMimeType: 'application/json',
-                    temperature: 0.7,
-                  },
-                }),
-              },
-            )
+      for (const model of models) {
+        try {
+          let parsed = await callGeminiModel(model, geminiKey, basePrompt)
 
-            if (res.ok) {
-              const data = await res.json()
-              const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text
-              if (rawText) {
-                const parsed = JSON.parse(rawText) as Quest
-                if (parsed.dish && parsed.rescueTarget && Array.isArray(parsed.steps)) {
-                  return NextResponse.json(parsed)
-                }
+          if (parsed) {
+            let validation = validateQuest(parsed, items, basics)
+
+            // Rule 7: Single retry on validation failure
+            if (!validation.valid) {
+              console.warn(`[AI Validation Failed on ${model}]: ${validation.reason}. Requesting 1-time retry...`)
+
+              const retryPrompt = `${basePrompt}
+
+[🚨 1회 재시도 요청 - 검증 실패 수정 지침]
+직전 생성 결과가 다음 검증 실패 이유로 거부되었습니다:
+"${validation.reason}"
+
+반드시 사용자가 입력한 재료명 원문("${items.map((i) => i.name).join(', ')}")을 100% 정확히 보존하고, "전자기레인지" 오탈자 및 괄호 조사를 제거하여 다시 정합성 있게 응답하십시오.`
+
+              parsed = await callGeminiModel(model, geminiKey, retryPrompt)
+              if (parsed) {
+                validation = validateQuest(parsed, items, basics)
               }
             }
-          } catch (modelErr) {
-            console.warn(`Model ${model} call failed, trying next:`, modelErr)
+
+            if (parsed && validation.valid) {
+              return NextResponse.json(parsed)
+            }
           }
+        } catch (modelErr) {
+          console.warn(`Model ${model} execution failed, trying next model:`, modelErr)
         }
-      } catch (err) {
-        console.warn('Gemini API call failed, using rule-based generator:', err)
       }
     }
 
-    // 3. Fallback Synthesizer Engine
+    // 3. Fallback Synthesizer Engine (guaranteed exact name preservation & valid Korean terms)
     const quest = generateFallbackQuest(basics, items, cookTime, excludeDish)
     return NextResponse.json(quest)
   } catch (error) {

@@ -186,7 +186,7 @@ export default function Page() {
 
       <div ref={resultRef} className="scroll-mt-4">
         {phase === 'success' && currentQuest ? (
-          <QuestResult quest={currentQuest} onReroll={reroll} isRerolling={isRerolling} />
+          <QuestResult quest={currentQuest} allItems={items} onReroll={reroll} isRerolling={isRerolling} />
         ) : null}
         {phase === 'failure' ? (
           <QuestFailure onRetry={() => runQuest()} message={errorMessage ?? undefined} />
