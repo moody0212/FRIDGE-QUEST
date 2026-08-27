@@ -31,6 +31,12 @@ interface AiQuest {
 
 const MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash']
 const DISH_ADJECTIVES = ['매콤', '특제', '간단', '맛있는', '초간단']
+const SPECIAL_INGREDIENTS_REQUIRING_PACKAGE_GUIDANCE = new Set([
+  '취두부',
+  '낫토',
+  '피단',
+  '블루치즈',
+])
 const GENERATION_ERROR = '퀘스트 생성에 문제가 생겼어요. 다시 시도해주세요.'
 
 function unique(values: string[]): string[] {
@@ -38,7 +44,23 @@ function unique(values: string[]): string[] {
 }
 
 function sameMembers(left: string[], right: string[]): boolean {
-  return left.length === right.length && left.every((value) => right.includes(value))
+  const uniqueLeft = unique(left)
+  const uniqueRight = unique(right)
+  return uniqueLeft.length === left.length &&
+    uniqueRight.length === right.length &&
+    uniqueLeft.length === uniqueRight.length &&
+    uniqueLeft.every((value) => uniqueRight.includes(value))
+}
+
+function ensureSafeAdditionalUses(additionalUses: AdditionalUse[]): AdditionalUse[] {
+  return additionalUses.map((item) =>
+    SPECIAL_INGREDIENTS_REQUIRING_PACKAGE_GUIDANCE.has(item.ingredient)
+      ? {
+          ingredient: item.ingredient,
+          usage: `${item.ingredient}는 제품마다 조리 및 섭취 방법이 다를 수 있으므로 제품 포장의 조리·섭취 안내를 확인한 후 활용해주세요.`,
+        }
+      : item,
+  )
 }
 
 function normalizeDishName(name: string): string {
@@ -122,7 +144,7 @@ function validateAiQuest(
       rescuedIngredients,
       failedIngredients,
       failedIngredientReasons: candidate.failedIngredientReasons,
-      additionalUses: candidate.additionalUses,
+      additionalUses: ensureSafeAdditionalUses(candidate.additionalUses),
       basicUsed: unique(candidate.basicUsed),
       extraNeeded: unique(candidate.extraNeeded),
       steps: candidate.steps.slice(0, 5),
@@ -201,14 +223,16 @@ function buildPrompt({ basics, items, cookTime, previousRecipeName, previousCook
 8. basicUsed에는 보유 기본 재료만 넣으세요. 추가로 꼭 필요한 재료만 extraNeeded에 넣으세요.
 9. EXP, 성공률, allIngredients, failedIngredients는 반환하지 마세요. 서버 코드가 계산합니다.
 10. steps는 최대 5개이며 실제 조리 순서여야 합니다.
-${priorityIngredients.length > 0 ? `11. 직전 퀘스트의 실패 재료 ${JSON.stringify(priorityIngredients)}를 이번에는 우선 구조해 보세요. 단, 부자연스럽거나 비현실적이면 다시 제외해도 됩니다.` : ''}
-${previousRecipeName ? `12. 직전 요리 "${previousRecipeName}"와 실질적으로 다른 요리를 만드세요. 수식어만 바꾸지 말고 가능하면 핵심 조리 방식도 "${previousCookingMethod}"와 다르게 하세요.` : ''}
+11. 조리 방식을 볶음이나 구이에만 치우치지 마세요. 입력 재료와 조리시간에 자연스럽다면 국, 찌개, 탕, 전골 같은 국물 요리를 볶음·구이·전·조림·찜과 동등한 후보로 반드시 검토하세요.
+12. 김치, 두부류, 채소, 버섯, 달걀, 육류, 해산물처럼 국물 요리에 자연스럽게 어울리는 재료가 있으면 국 또는 찌개가 더 현실적인지 먼저 판단하세요. 다만 국물 요리에 맞지 않는 특수 식재료를 억지로 넣지는 마세요.
+${priorityIngredients.length > 0 ? `13. 직전 퀘스트의 실패 재료 ${JSON.stringify(priorityIngredients)}를 이번에는 우선 구조해 보세요. 단, 부자연스럽거나 비현실적이면 다시 제외해도 됩니다.` : ''}
+${previousRecipeName ? `14. 직전 요리 "${previousRecipeName}"와 실질적으로 다른 요리를 만드세요. 핵심 조리 방식이 "${previousCookingMethod}"였다면 국·찌개·탕·전골·볶음·구이·전·조림·찜 중 다른 계열을 우선 검토하세요. 수식어만 바꾼 요리는 금지합니다.` : ''}
 
 [JSON 형식]
 {
   "rescueTarget": "대표 구조 재료 원문",
   "dish": "요리명",
-  "cookingMethod": "볶음/구이/전/국 등 핵심 조리 방식",
+  "cookingMethod": "국/찌개/탕/전골/볶음/구이/전/조림/찜 중 핵심 조리 방식",
   "time": "약 15분",
   "rescuedIngredients": ["steps에서 실제 사용하는 allIngredients 원문"],
   "failedIngredientReasons": [{ "ingredient": "사용하지 않은 원문", "reason": "현재 요리와 맞지 않는 짧은 한 문장" }],
