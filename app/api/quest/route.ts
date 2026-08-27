@@ -337,26 +337,37 @@ STEP F. [조리법 서술]
   "exp": 100
 }`
 
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { responseMimeType: 'application/json' },
-            }),
-          },
-        )
+        const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro']
 
-        if (res.ok) {
-          const data = await res.json()
-          const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text
-          if (rawText) {
-            const parsed = JSON.parse(rawText) as Quest
-            if (parsed.dish && parsed.rescueTarget && Array.isArray(parsed.steps)) {
-              return NextResponse.json(parsed)
+        for (const model of models) {
+          try {
+            const res = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: prompt }] }],
+                  generationConfig: {
+                    responseMimeType: 'application/json',
+                    temperature: 0.7,
+                  },
+                }),
+              },
+            )
+
+            if (res.ok) {
+              const data = await res.json()
+              const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text
+              if (rawText) {
+                const parsed = JSON.parse(rawText) as Quest
+                if (parsed.dish && parsed.rescueTarget && Array.isArray(parsed.steps)) {
+                  return NextResponse.json(parsed)
+                }
+              }
             }
+          } catch (modelErr) {
+            console.warn(`Model ${model} call failed, trying next:`, modelErr)
           }
         }
       } catch (err) {
